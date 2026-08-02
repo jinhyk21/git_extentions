@@ -13,7 +13,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const folders = vscode.workspace.workspaceFolders?.map((folder) => folder.uri.fsPath) ?? [];
   void repositoryManager.refresh(folders).then(() => treeProvider.refresh());
 }
-
+// test commit 
 export function deactivate(): void {}
 
 type TreeNode = RepositoryNode | FileGroupNode | ChangedFileNode;
