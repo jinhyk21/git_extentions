@@ -13,10 +13,37 @@ export function activate(context: vscode.ExtensionContext): void {
   const folders = vscode.workspace.workspaceFolders?.map((folder) => folder.uri.fsPath) ?? [];
   void repositoryManager.refresh(folders).then(() => treeProvider.refresh());
 }
-// test commit 
+// test commit s
 export function deactivate(): void {}
 
-type TreeNode = RepositoryNode | FileGroupNode | ChangedFileNode;
+type TreeNode = RepositoryNode | ActionGroupNode | ActionNode | FileGroupNode | ChangedFileNode;
+
+type RepositoryAction =
+  | "stageAll"
+  | "unstageAll"
+  | "commit"
+  | "fetch"
+  | "pull"
+  | "push"
+  | "checkoutBranch"
+  | "createBranch"
+  | "mergeBranch"
+  | "rebaseBranch"
+  | "stashPush"
+  | "stashPop";
+
+type ActionGroupNode = {
+  readonly type: "actionGroup";
+  readonly repository: RepositoryNode;
+};
+
+type ActionNode = {
+  readonly type: "action";
+  readonly repository: RepositoryNode;
+  readonly action: RepositoryAction;
+  readonly label: string;
+  readonly icon: string;
+};
 
 type FileGroupNode = {
   readonly type: "fileGroup";
@@ -43,6 +70,25 @@ class RepositoryTreeProvider implements vscode.TreeDataProvider<TreeNode> {
   }
 
   public getTreeItem(element: TreeNode): vscode.TreeItem {
+    if (this.isActionGroupNode(element)) {
+      const item = new vscode.TreeItem("Actions", vscode.TreeItemCollapsibleState.Expanded);
+      item.contextValue = "actionGroup";
+      item.iconPath = new vscode.ThemeIcon("tools");
+      return item;
+    }
+
+    if (this.isActionNode(element)) {
+      const item = new vscode.TreeItem(element.label, vscode.TreeItemCollapsibleState.None);
+      item.contextValue = `action.${element.action}`;
+      item.iconPath = new vscode.ThemeIcon(element.icon);
+      item.command = {
+        command: "gitWorkspacePro.runAction",
+        title: element.label,
+        arguments: [element]
+      };
+      return item;
+    }
+
     if (this.isFileGroupNode(element)) {
       const item = new vscode.TreeItem(element.label, vscode.TreeItemCollapsibleState.Collapsed);
       item.contextValue = "fileGroup";
@@ -88,6 +134,14 @@ class RepositoryTreeProvider implements vscode.TreeDataProvider<TreeNode> {
       return [];
     }
 
+    if (this.isActionGroupNode(element)) {
+      return this.getActionNodes(element.repository);
+    }
+
+    if (this.isActionNode(element)) {
+      return [];
+    }
+
     return this.getRepositoryChildren(element);
   }
 
@@ -109,7 +163,30 @@ class RepositoryTreeProvider implements vscode.TreeDataProvider<TreeNode> {
 
   private getRepositoryChildren(repository: RepositoryNode): TreeNode[] {
     const groups = this.getFileGroups(repository);
-    return [...groups, ...repository.children];
+    return [{ type: "actionGroup", repository }, ...groups, ...repository.children];
+  }
+
+  private getActionNodes(repository: RepositoryNode): ActionNode[] {
+    const actions: Array<Omit<ActionNode, "repository" | "type">> = [
+      { action: "stageAll", label: "Stage All", icon: "add" },
+      { action: "unstageAll", label: "Unstage All", icon: "remove" },
+      { action: "commit", label: "Commit", icon: "git-commit" },
+      { action: "fetch", label: "Fetch", icon: "cloud-download" },
+      { action: "pull", label: "Pull", icon: "cloud-download" },
+      { action: "push", label: "Push", icon: "cloud-upload" },
+      { action: "checkoutBranch", label: "Checkout Branch", icon: "git-branch" },
+      { action: "createBranch", label: "Create Branch", icon: "git-branch-create" },
+      { action: "mergeBranch", label: "Merge Branch", icon: "git-merge" },
+      { action: "rebaseBranch", label: "Rebase Onto Branch", icon: "repo-force-push" },
+      { action: "stashPush", label: "Stash Push", icon: "archive" },
+      { action: "stashPop", label: "Stash Pop", icon: "folder-opened" }
+    ];
+
+    return actions.map((action) => ({
+      type: "action",
+      repository,
+      ...action
+    }));
   }
 
   private getFileGroups(repository: RepositoryNode): FileGroupNode[] {
@@ -138,5 +215,13 @@ class RepositoryTreeProvider implements vscode.TreeDataProvider<TreeNode> {
 
   private isChangedFileNode(element: TreeNode): element is ChangedFileNode {
     return "type" in element && element.type === "changedFile";
+  }
+
+  private isActionGroupNode(element: TreeNode): element is ActionGroupNode {
+    return "type" in element && element.type === "actionGroup";
+  }
+
+  private isActionNode(element: TreeNode): element is ActionNode {
+    return "type" in element && element.type === "action";
   }
 }

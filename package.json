@@ -54,6 +54,80 @@
         "command": "gitWorkspacePro.unstageFile",
         "title": "Unstage File",
         "icon": "$(remove)"
+      },
+      {
+        "command": "gitWorkspacePro.openDiff",
+        "title": "Open Diff",
+        "icon": "$(diff)"
+      },
+      {
+        "command": "gitWorkspacePro.discardFile",
+        "title": "Discard File",
+        "icon": "$(discard)"
+      },
+      {
+        "command": "gitWorkspacePro.stageAll",
+        "title": "Stage All",
+        "icon": "$(add)"
+      },
+      {
+        "command": "gitWorkspacePro.unstageAll",
+        "title": "Unstage All",
+        "icon": "$(remove)"
+      },
+      {
+        "command": "gitWorkspacePro.commit",
+        "title": "Commit",
+        "icon": "$(git-commit)"
+      },
+      {
+        "command": "gitWorkspacePro.fetch",
+        "title": "Fetch",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "gitWorkspacePro.pull",
+        "title": "Pull",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "gitWorkspacePro.push",
+        "title": "Push",
+        "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "gitWorkspacePro.checkoutBranch",
+        "title": "Checkout Branch",
+        "icon": "$(git-branch)"
+      },
+      {
+        "command": "gitWorkspacePro.createBranch",
+        "title": "Create Branch",
+        "icon": "$(git-branch-create)"
+      },
+      {
+        "command": "gitWorkspacePro.mergeBranch",
+        "title": "Merge Branch",
+        "icon": "$(git-merge)"
+      },
+      {
+        "command": "gitWorkspacePro.rebaseBranch",
+        "title": "Rebase Onto Branch",
+        "icon": "$(repo-force-push)"
+      },
+      {
+        "command": "gitWorkspacePro.stashPush",
+        "title": "Stash Push",
+        "icon": "$(archive)"
+      },
+      {
+        "command": "gitWorkspacePro.stashPop",
+        "title": "Stash Pop",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "gitWorkspacePro.runAction",
+        "title": "Run Action"
       }
     ],
     "menus": {
@@ -64,19 +138,74 @@
           "group": "inline@1"
         },
         {
+          "command": "gitWorkspacePro.openDiff",
+          "when": "view == gitWorkspacePro.repositories && viewItem =~ /changedFile/",
+          "group": "inline@2"
+        },
+        {
           "command": "gitWorkspacePro.stageFile",
           "when": "view == gitWorkspacePro.repositories && (viewItem == changedFile.unstaged || viewItem == changedFile.untracked || viewItem == changedFile.conflicted)",
-          "group": "inline@2"
+          "group": "inline@3"
         },
         {
           "command": "gitWorkspacePro.unstageFile",
           "when": "view == gitWorkspacePro.repositories && viewItem == changedFile.staged",
-          "group": "inline@3"
+          "group": "inline@4"
+        },
+        {
+          "command": "gitWorkspacePro.discardFile",
+          "when": "view == gitWorkspacePro.repositories && (viewItem == changedFile.unstaged || viewItem == changedFile.untracked)",
+          "group": "inline@5"
         },
         {
           "command": "gitWorkspacePro.refreshRepositories",
           "when": "view == gitWorkspacePro.repositories && viewItem == repository",
           "group": "inline@4"
+        },
+        {
+          "command": "gitWorkspacePro.stageAll",
+          "when": "view == gitWorkspacePro.repositories && viewItem == repository",
+          "group": "repo@1"
+        },
+        {
+          "command": "gitWorkspacePro.commit",
+          "when": "view == gitWorkspacePro.repositories && viewItem == repository",
+          "group": "repo@2"
+        },
+        {
+          "command": "gitWorkspacePro.fetch",
+          "when": "view == gitWorkspacePro.repositories && viewItem == repository",
+          "group": "sync@1"
+        },
+        {
+          "command": "gitWorkspacePro.pull",
+          "when": "view == gitWorkspacePro.repositories && viewItem == repository",
+          "group": "sync@2"
+        },
+        {
+          "command": "gitWorkspacePro.push",
+          "when": "view == gitWorkspacePro.repositories && viewItem == repository",
+          "group": "sync@3"
+        },
+        {
+          "command": "gitWorkspacePro.checkoutBranch",
+          "when": "view == gitWorkspacePro.repositories && viewItem == repository",
+          "group": "branch@1"
+        },
+        {
+          "command": "gitWorkspacePro.createBranch",
+          "when": "view == gitWorkspacePro.repositories && viewItem == repository",
+          "group": "branch@2"
+        },
+        {
+          "command": "gitWorkspacePro.mergeBranch",
+          "when": "view == gitWorkspacePro.repositories && viewItem == repository",
+          "group": "history@1"
+        },
+        {
+          "command": "gitWorkspacePro.rebaseBranch",
+          "when": "view == gitWorkspacePro.repositories && viewItem == repository",
+          "group": "history@2"
         }
       ]
     }

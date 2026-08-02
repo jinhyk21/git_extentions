@@ -25,31 +25,31 @@
 - Done: Add file tree nodes below each repository.
 - Add open diff action.
 - Done: Add stage and unstage actions.
-- Add repository refresh after file actions.
+- Done: Add repository refresh after file actions.
 
 ## Milestone 3: Commit
 
-- Create commit command.
-- Add commit message input.
+- Done: Create commit command.
+- Done: Add commit message input.
 - Validate staged files.
 - Support stage all then commit.
 - Handle hook failures.
-- Refresh repository status after commit.
+- Done: Refresh repository status after commit.
 
 ## Milestone 4: Branch Manager
 
 - List local branches.
 - List remote branches.
-- Checkout branch.
-- Create branch.
+- Done: Checkout branch.
+- Done: Create branch.
 - Delete branch with confirmation.
 - Handle dirty working tree.
 
 ## Milestone 5: Sync
 
-- Fetch repository.
-- Pull repository.
-- Push repository.
+- Done: Fetch repository.
+- Done: Pull repository.
+- Done: Push repository.
 - Push branch with upstream.
 - Handle auth and remote rejection errors.
 
