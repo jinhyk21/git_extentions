@@ -24,6 +24,7 @@
 - Add file tree nodes below each repository.
 - Done: Add file tree nodes below each repository.
 - Add open diff action.
+- Done: Add open diff action.
 - Done: Add stage and unstage actions.
 - Done: Add repository refresh after file actions.
 
@@ -33,6 +34,7 @@
 - Done: Add commit message input.
 - Validate staged files.
 - Support stage all then commit.
+- Done: Support stage all then commit.
 - Handle hook failures.
 - Done: Refresh repository status after commit.
 
@@ -63,8 +65,8 @@
 
 ## Milestone 7: Merge/Rebase/Conflict
 
-- Add merge state machine.
-- Add rebase state machine.
+- Started: Add merge command.
+- Started: Add rebase command.
 - Detect conflict state.
 - Add conflict dashboard.
 - Open VS Code merge editor.

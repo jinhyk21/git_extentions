@@ -126,8 +126,9 @@
         "icon": "$(folder-opened)"
       },
       {
-        "command": "gitWorkspacePro.runAction",
-        "title": "Run Action"
+        "command": "gitWorkspacePro.showRepositoryActions",
+        "title": "Repository Actions",
+        "icon": "$(ellipsis)"
       }
     ],
     "menus": {
@@ -163,49 +164,9 @@
           "group": "inline@4"
         },
         {
-          "command": "gitWorkspacePro.stageAll",
+          "command": "gitWorkspacePro.showRepositoryActions",
           "when": "view == gitWorkspacePro.repositories && viewItem == repository",
-          "group": "repo@1"
-        },
-        {
-          "command": "gitWorkspacePro.commit",
-          "when": "view == gitWorkspacePro.repositories && viewItem == repository",
-          "group": "repo@2"
-        },
-        {
-          "command": "gitWorkspacePro.fetch",
-          "when": "view == gitWorkspacePro.repositories && viewItem == repository",
-          "group": "sync@1"
-        },
-        {
-          "command": "gitWorkspacePro.pull",
-          "when": "view == gitWorkspacePro.repositories && viewItem == repository",
-          "group": "sync@2"
-        },
-        {
-          "command": "gitWorkspacePro.push",
-          "when": "view == gitWorkspacePro.repositories && viewItem == repository",
-          "group": "sync@3"
-        },
-        {
-          "command": "gitWorkspacePro.checkoutBranch",
-          "when": "view == gitWorkspacePro.repositories && viewItem == repository",
-          "group": "branch@1"
-        },
-        {
-          "command": "gitWorkspacePro.createBranch",
-          "when": "view == gitWorkspacePro.repositories && viewItem == repository",
-          "group": "branch@2"
-        },
-        {
-          "command": "gitWorkspacePro.mergeBranch",
-          "when": "view == gitWorkspacePro.repositories && viewItem == repository",
-          "group": "history@1"
-        },
-        {
-          "command": "gitWorkspacePro.rebaseBranch",
-          "when": "view == gitWorkspacePro.repositories && viewItem == repository",
-          "group": "history@2"
+          "group": "inline@1"
         }
       ]
     }

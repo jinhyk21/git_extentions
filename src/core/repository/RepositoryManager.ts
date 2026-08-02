@@ -52,8 +52,8 @@ export class RepositoryManager {
     await this.gitAdapter.pull(repositoryPath);
   }
 
-  public async push(repositoryPath: string): Promise<void> {
-    await this.gitAdapter.push(repositoryPath);
+  public async push(repositoryPath: string): Promise<string> {
+    return this.gitAdapter.push(repositoryPath);
   }
 
   public async listBranches(repositoryPath: string): Promise<readonly string[]> {
