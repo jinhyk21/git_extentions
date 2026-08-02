@@ -1,0 +1,8 @@
+node_modules/
+src/
+test/
+.ai/
+docs/
+.eslintrc.json
+tsconfig.json
+*.map

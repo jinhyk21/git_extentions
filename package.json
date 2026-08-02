@@ -1,0 +1,98 @@
+{
+  "name": "git-workspace-pro",
+  "displayName": "Git Workspace Pro",
+  "description": "A multi-repository Git workspace manager for VS Code.",
+  "version": "0.0.1",
+  "publisher": "internal",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Source Control",
+    "Other"
+  ],
+  "activationEvents": [
+    "onView:gitWorkspacePro.repositories",
+    "onCommand:gitWorkspacePro.refreshRepositories"
+  ],
+  "main": "./dist/extension/activate.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "gitWorkspacePro",
+          "title": "Git Workspace Pro",
+          "icon": "$(source-control)"
+        }
+      ]
+    },
+    "views": {
+      "gitWorkspacePro": [
+        {
+          "id": "gitWorkspacePro.repositories",
+          "name": "Repositories"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "gitWorkspacePro.refreshRepositories",
+        "title": "Git Workspace Pro: Refresh Repositories",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "gitWorkspacePro.openChangedFile",
+        "title": "Open File",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "gitWorkspacePro.stageFile",
+        "title": "Stage File",
+        "icon": "$(add)"
+      },
+      {
+        "command": "gitWorkspacePro.unstageFile",
+        "title": "Unstage File",
+        "icon": "$(remove)"
+      }
+    ],
+    "menus": {
+      "view/item/context": [
+        {
+          "command": "gitWorkspacePro.openChangedFile",
+          "when": "view == gitWorkspacePro.repositories && viewItem =~ /changedFile/",
+          "group": "inline@1"
+        },
+        {
+          "command": "gitWorkspacePro.stageFile",
+          "when": "view == gitWorkspacePro.repositories && (viewItem == changedFile.unstaged || viewItem == changedFile.untracked || viewItem == changedFile.conflicted)",
+          "group": "inline@2"
+        },
+        {
+          "command": "gitWorkspacePro.unstageFile",
+          "when": "view == gitWorkspacePro.repositories && viewItem == changedFile.staged",
+          "group": "inline@3"
+        },
+        {
+          "command": "gitWorkspacePro.refreshRepositories",
+          "when": "view == gitWorkspacePro.repositories && viewItem == repository",
+          "group": "inline@4"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint src --ext ts",
+    "test": "npm run compile"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.10",
+    "@types/vscode": "^1.90.0",
+    "@typescript-eslint/eslint-plugin": "^7.16.0",
+    "@typescript-eslint/parser": "^7.16.0",
+    "eslint": "^8.57.0",
+    "typescript": "^5.5.4"
+  }
+}
