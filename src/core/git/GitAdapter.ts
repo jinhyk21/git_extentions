@@ -60,8 +60,12 @@ export class GitAdapter {
     await this.runOrThrow(["pull"], repositoryPath, "Pull failed", 60_000);
   }
 
-  public async push(repositoryPath: string): Promise<void> {
-    await this.runOrThrow(["push"], repositoryPath, "Push failed", 60_000);
+  public async pullBranch(repositoryPath: string, branch: string): Promise<void> {
+    await this.runOrThrow(["pull", "origin", branch], repositoryPath, "Pull branch failed", 60_000);
+  }
+
+  public async push(repositoryPath: string): Promise<string> {
+    return this.runForOutputOrThrow(["push", "-u", "origin", "HEAD"], repositoryPath, "Push failed", 60_000);
   }
 
   public async listBranches(repositoryPath: string): Promise<readonly string[]> {
@@ -177,5 +181,20 @@ export class GitAdapter {
     if (result.exitCode !== 0) {
       throw new GitWorkspaceError(ErrorCodes.UnknownGitError, result.stderr.trim() || fallbackMessage);
     }
+  }
+
+  private async runForOutputOrThrow(
+    args: readonly string[],
+    repositoryPath: string,
+    fallbackMessage: string,
+    timeoutMs = 10_000
+  ): Promise<string> {
+    const result = await this.runner.run(args, repositoryPath, timeoutMs);
+    const output = [result.stdout, result.stderr].filter(Boolean).join("\n");
+    if (result.exitCode !== 0) {
+      throw new GitWorkspaceError(ErrorCodes.UnknownGitError, output.trim() || fallbackMessage);
+    }
+
+    return output;
   }
 }

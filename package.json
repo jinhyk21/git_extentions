@@ -91,6 +91,11 @@
         "icon": "$(cloud-download)"
       },
       {
+        "command": "gitWorkspacePro.pullBranch",
+        "title": "Pull From Branch",
+        "icon": "$(cloud-download)"
+      },
+      {
         "command": "gitWorkspacePro.push",
         "title": "Push",
         "icon": "$(cloud-upload)"
@@ -126,8 +131,9 @@
         "icon": "$(folder-opened)"
       },
       {
-        "command": "gitWorkspacePro.runAction",
-        "title": "Run Action"
+        "command": "gitWorkspacePro.showRepositoryActions",
+        "title": "Repository Actions",
+        "icon": "$(ellipsis)"
       }
     ],
     "menus": {
@@ -163,49 +169,9 @@
           "group": "inline@4"
         },
         {
-          "command": "gitWorkspacePro.stageAll",
+          "command": "gitWorkspacePro.showRepositoryActions",
           "when": "view == gitWorkspacePro.repositories && viewItem == repository",
-          "group": "repo@1"
-        },
-        {
-          "command": "gitWorkspacePro.commit",
-          "when": "view == gitWorkspacePro.repositories && viewItem == repository",
-          "group": "repo@2"
-        },
-        {
-          "command": "gitWorkspacePro.fetch",
-          "when": "view == gitWorkspacePro.repositories && viewItem == repository",
-          "group": "sync@1"
-        },
-        {
-          "command": "gitWorkspacePro.pull",
-          "when": "view == gitWorkspacePro.repositories && viewItem == repository",
-          "group": "sync@2"
-        },
-        {
-          "command": "gitWorkspacePro.push",
-          "when": "view == gitWorkspacePro.repositories && viewItem == repository",
-          "group": "sync@3"
-        },
-        {
-          "command": "gitWorkspacePro.checkoutBranch",
-          "when": "view == gitWorkspacePro.repositories && viewItem == repository",
-          "group": "branch@1"
-        },
-        {
-          "command": "gitWorkspacePro.createBranch",
-          "when": "view == gitWorkspacePro.repositories && viewItem == repository",
-          "group": "branch@2"
-        },
-        {
-          "command": "gitWorkspacePro.mergeBranch",
-          "when": "view == gitWorkspacePro.repositories && viewItem == repository",
-          "group": "history@1"
-        },
-        {
-          "command": "gitWorkspacePro.rebaseBranch",
-          "when": "view == gitWorkspacePro.repositories && viewItem == repository",
-          "group": "history@2"
+          "group": "inline@1"
         }
       ]
     }
@@ -217,7 +183,7 @@
     "test": "npm run compile"
   },
   "devDependencies": {
-    "@types/node": "^20.14.10",
+    "@types/node": "^20.19.43",
     "@types/vscode": "^1.90.0",
     "@typescript-eslint/eslint-plugin": "^7.16.0",
     "@typescript-eslint/parser": "^7.16.0",
