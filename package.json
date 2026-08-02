@@ -91,6 +91,11 @@
         "icon": "$(cloud-download)"
       },
       {
+        "command": "gitWorkspacePro.pullBranch",
+        "title": "Pull From Branch",
+        "icon": "$(cloud-download)"
+      },
+      {
         "command": "gitWorkspacePro.push",
         "title": "Push",
         "icon": "$(cloud-upload)"

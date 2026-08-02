@@ -60,6 +60,10 @@ export class GitAdapter {
     await this.runOrThrow(["pull"], repositoryPath, "Pull failed", 60_000);
   }
 
+  public async pullBranch(repositoryPath: string, branch: string): Promise<void> {
+    await this.runOrThrow(["pull", "origin", branch], repositoryPath, "Pull branch failed", 60_000);
+  }
+
   public async push(repositoryPath: string): Promise<string> {
     return this.runForOutputOrThrow(["push"], repositoryPath, "Push failed", 60_000);
   }

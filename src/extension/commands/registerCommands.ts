@@ -137,6 +137,20 @@ export function registerCommands(
         repositoryManager.pull(node.rootPath)
       );
     }),
+    vscode.commands.registerCommand("gitWorkspacePro.pullBranch", async (node: RepositoryCommandNode) => {
+      if (!isRepositoryCommandNode(node)) {
+        return;
+      }
+
+      const branch = await pickBranch(repositoryManager, node);
+      if (!branch) {
+        return;
+      }
+
+      await runRepositoryOperation(repositoryManager, refreshTree, "Pull branch", node, () =>
+        repositoryManager.pullBranch(node.rootPath, branch)
+      );
+    }),
     vscode.commands.registerCommand("gitWorkspacePro.push", async (node: RepositoryCommandNode) => {
       if (!isRepositoryCommandNode(node)) {
         return;
@@ -221,6 +235,7 @@ type RepositoryAction =
   | "commit"
   | "fetch"
   | "pull"
+  | "pullBranch"
   | "push"
   | "checkoutBranch"
   | "createBranch"
@@ -381,6 +396,7 @@ async function pickRepositoryAction(repository: RepositoryCommandNode): Promise<
     { action: "commit", label: "Commit", description: "Create commit for staged files" },
     { action: "fetch", label: "Fetch", description: "Fetch all remotes and prune" },
     { action: "pull", label: "Pull", description: "Pull current branch" },
+    { action: "pullBranch", label: "Pull From Branch", description: "Pull from selected branch" },
     { action: "push", label: "Push", description: "Push current branch" },
     { action: "checkoutBranch", label: "Checkout Branch", description: "Switch current repository branch" },
     { action: "createBranch", label: "Create Branch", description: "Create and switch to new branch" },
@@ -426,6 +442,11 @@ async function runRepositoryAction(
     case "pull":
       await runRepositoryOperation(repositoryManager, refreshTree, "Pull", repository, () =>
         repositoryManager.pull(repository.rootPath)
+      );
+      return;
+    case "pullBranch":
+      await runBranchOperation(repositoryManager, refreshTree, repository, "Pull branch", (branch) =>
+        repositoryManager.pullBranch(repository.rootPath, branch)
       );
       return;
     case "push":
