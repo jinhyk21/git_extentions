@@ -135,7 +135,7 @@ class RepositoryTreeProvider implements vscode.TreeDataProvider<TreeNode> {
 
   private getRepositoryChildren(repository: RepositoryNode): TreeNode[] {
     const groups = this.getFileGroups(repository);
-    return [{ type: "actionMenu", repository }, ...groups, ...repository.children];
+    return [...groups, ...repository.children];
   }
 
   private getFileGroups(repository: RepositoryNode): FileGroupNode[] {
