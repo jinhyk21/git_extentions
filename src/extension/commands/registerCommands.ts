@@ -385,8 +385,8 @@ async function showMergeRequestLinkIfPresent(pushOutput: string): Promise<void> 
 }
 
 function findMergeRequestUrl(output: string): string | undefined {
-  const urls = output.match(/https?:\/\/[^\s)>\]]+/g) ?? [];
-  return urls.find((url) => /merge_requests|pull\/new|compare|pull-request/i.test(url)) ?? urls[0];
+  const urls = output.match(/https?:\/\/[^\s)>]+/g) ?? [];
+  return urls.find((url) => /merge_requests|pull\/new|compare|pull-request/i.test(url));
 }
 
 async function pickRepositoryAction(repository: RepositoryCommandNode): Promise<RepositoryAction | undefined> {
