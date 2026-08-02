@@ -1,0 +1,22 @@
+﻿<svg width='256' height='256' viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'>
+<defs>
+<linearGradient id='bg' x1='0%' y1='0%' x2='100%' y2='100%'>
+<stop offset='0%' stop-color='#2563eb'/>
+<stop offset='100%' stop-color='#7c3aed'/>
+</linearGradient>
+<linearGradient id='branch' x1='0%' y1='0%' x2='100%' y2='100%'>
+<stop offset='0%' stop-color='#ffffff'/>
+<stop offset='100%' stop-color='#e0e7ff'/>
+</linearGradient>
+</defs>
+<rect width='256' height='256' rx='56' fill='url(#bg)'/>
+<g fill='none' stroke='url(#branch)' stroke-width='14' stroke-linecap='round' stroke-linejoin='round'>
+<line x1='88' y1='64' x2='88' y2='192'/>
+<path d='M88 96 C 88 160, 168 112, 168 176'/>
+</g>
+<g fill='url(#branch)'>
+<circle cx='88' cy='64' r='22'/>
+<circle cx='88' cy='192' r='22'/>
+<circle cx='168' cy='176' r='22'/>
+</g>
+</svg>

@@ -15,6 +15,7 @@
     "onView:gitWorkspacePro.repositories",
     "onCommand:gitWorkspacePro.refreshRepositories"
   ],
+  "icon": "media/logo.png",
   "main": "./dist/extension/activate.js",
   "contributes": {
     "viewsContainers": {
@@ -22,7 +23,7 @@
         {
           "id": "gitWorkspacePro",
           "title": "Git Workspace Pro",
-          "icon": "$(source-control)"
+          "icon": "media/activitybar.svg"
         }
       ]
     },
