@@ -65,7 +65,7 @@ export class GitAdapter {
   }
 
   public async push(repositoryPath: string): Promise<string> {
-    return this.runForOutputOrThrow(["push"], repositoryPath, "Push failed", 60_000);
+    return this.runForOutputOrThrow(["push", "-u", "origin", "HEAD"], repositoryPath, "Push failed", 60_000);
   }
 
   public async listBranches(repositoryPath: string): Promise<readonly string[]> {
