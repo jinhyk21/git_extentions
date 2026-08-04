@@ -96,6 +96,17 @@ export class GitAdapter {
     return this.runForOutputOrThrow(["push", "-u", "origin", "HEAD"], repositoryPath, "Push failed", 60_000);
   }
 
+  public async getRemoteUrl(repositoryPath: string, remoteName = "origin"): Promise<string | undefined> {
+    const result = await this.exec(["remote", "get-url", remoteName], repositoryPath, 5_000);
+    return result.exitCode === 0 ? result.stdout.trim() : undefined;
+  }
+
+  public async getCurrentBranch(repositoryPath: string): Promise<string | undefined> {
+    const result = await this.exec(["branch", "--show-current"], repositoryPath, 5_000);
+    const branch = result.stdout.trim();
+    return result.exitCode === 0 && branch.length > 0 ? branch : undefined;
+  }
+
   public async listBranches(repositoryPath: string): Promise<readonly string[]> {
     const result = await this.exec(["branch", "--format=%(refname:short)"], repositoryPath, 10_000);
     if (result.exitCode !== 0) {

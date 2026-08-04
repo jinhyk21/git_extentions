@@ -3,6 +3,7 @@ import path from "node:path";
 import type { RepositoryManager } from "../../core/repository/RepositoryManager";
 import { ConflictResolutionPanel } from "../webview/ConflictResolutionPanel";
 import { HistoryPanel } from "../webview/HistoryPanel";
+import { buildCompareUrl } from "./buildCompareUrl";
 import {
   findMergeRequestUrl,
   getRepositoryFromActionTarget,
@@ -340,7 +341,7 @@ async function pushRepository(
       }
     );
     await refreshWorkspace(repositoryManager, refreshTree);
-    await showMergeRequestLinkIfPresent(pushOutput);
+    await showMergeRequestLinkIfPresent(repositoryManager, repository, pushOutput);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     vscode.window.showErrorMessage(`Push failed: ${message}`);
@@ -348,8 +349,14 @@ async function pushRepository(
   }
 }
 
-async function showMergeRequestLinkIfPresent(pushOutput: string): Promise<void> {
-  const mergeRequestUrl = findMergeRequestUrl(pushOutput);
+async function showMergeRequestLinkIfPresent(
+  repositoryManager: RepositoryManager,
+  repository: RepositoryCommandNode,
+  pushOutput: string
+): Promise<void> {
+  const mergeRequestUrl =
+    findMergeRequestUrl(pushOutput) ?? (await buildFallbackCompareUrl(repositoryManager, repository));
+
   if (!mergeRequestUrl) {
     vscode.window.showInformationMessage("Push completed.");
     return;
@@ -366,6 +373,29 @@ async function showMergeRequestLinkIfPresent(pushOutput: string): Promise<void> 
   if (action === "Open Merge Request") {
     await vscode.env.openExternal(vscode.Uri.parse(mergeRequestUrl));
   }
+}
+
+/**
+ * When pushing to a branch that already exists on the remote, GitHub/GitLab
+ * print no "create a pull/merge request" hint in the push output — that
+ * hint only appears for a brand-new branch. This builds the same
+ * compare/merge-request URL directly from the remote + branch name instead,
+ * so the "Open Merge Request" prompt is offered consistently either way.
+ */
+async function buildFallbackCompareUrl(
+  repositoryManager: RepositoryManager,
+  repository: RepositoryCommandNode
+): Promise<string | undefined> {
+  const [remoteUrl, branch] = await Promise.all([
+    repositoryManager.getRemoteUrl(repository.rootPath),
+    repositoryManager.getCurrentBranch(repository.rootPath)
+  ]);
+
+  if (!remoteUrl || !branch) {
+    return undefined;
+  }
+
+  return buildCompareUrl(remoteUrl, branch);
 }
 
 async function pickRepositoryAction(repository: RepositoryCommandNode): Promise<RepositoryAction | undefined> {

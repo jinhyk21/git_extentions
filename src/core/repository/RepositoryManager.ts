@@ -115,6 +115,14 @@ export class RepositoryManager {
     return this.gitAdapter.push(repositoryPath);
   }
 
+  public async getRemoteUrl(repositoryPath: string): Promise<string | undefined> {
+    return this.gitAdapter.getRemoteUrl(repositoryPath);
+  }
+
+  public async getCurrentBranch(repositoryPath: string): Promise<string | undefined> {
+    return this.gitAdapter.getCurrentBranch(repositoryPath);
+  }
+
   public async listBranches(repositoryPath: string): Promise<readonly string[]> {
     return this.gitAdapter.listBranches(repositoryPath);
   }
