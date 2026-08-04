@@ -46,7 +46,22 @@ export function getRepositoryFromActionTarget(node: unknown): RepositoryCommandN
   return undefined;
 }
 
+const MERGE_REQUEST_HINT_PATTERN = /merge[_-]requests|pull\/new|compare|pull-request/i;
+
 export function findMergeRequestUrl(output: string): string | undefined {
-  const urls = output.match(/https?:\/\/[^\s)>\]]+/g) ?? [];
-  return urls.find((url) => /merge[_-]requests|pull\/new|compare|pull-request/i.test(url)) ?? urls[0];
+  // Only consider URLs on lines that are NOT the plain "To <remote-url>" line
+  // git prints on every push — that line is the remote's URL, not a PR/MR
+  // link, and would otherwise be picked up by an untargeted fallback.
+  const candidateLines = output.split(/\r?\n/).filter((line) => !/^\s*To\s+https?:\/\//i.test(line));
+  const urls = candidateLines.join("\n").match(/https?:\/\/[^\s)>\]]+/g) ?? [];
+
+  return urls.find((url) => MERGE_REQUEST_HINT_PATTERN.test(url)) ?? urls.find((url) => !isBareRepositoryUrl(url));
+}
+
+function isBareRepositoryUrl(url: string): boolean {
+  // A URL with no path segments beyond the org/repo (e.g.
+  // https://github.com/org/repo) is just the remote's own address, not a
+  // link to a specific PR/MR creation page.
+  const pathSegments = new URL(url).pathname.split("/").filter(Boolean);
+  return pathSegments.length <= 2;
 }

@@ -130,4 +130,29 @@ describe("findMergeRequestUrl", () => {
     const output = "https://example.com/unrelated\nhttps://github.com/a/b/pull/new/feature";
     assert.strictEqual(findMergeRequestUrl(output), "https://github.com/a/b/pull/new/feature");
   });
+
+  it("does not fall back to the plain 'To <remote-url>' line git prints on every push", () => {
+    // GitHub only prints the "Create a pull request" hint for a NEWLY
+    // pushed branch. Pushing to an already-existing branch leaves only the
+    // "To <repo-url>" line, which must not be mistaken for a PR link.
+    const output = ["To https://github.com/jinhyk21/git_extentions", "   abc1234..def5678  main -> main"].join("\n");
+    assert.strictEqual(findMergeRequestUrl(output), undefined);
+  });
+
+  it("ignores the 'To' line even when a real PR hint is also present", () => {
+    const output = [
+      "remote: ",
+      "remote: Create a pull request for 'feature' on GitHub by visiting:",
+      "remote:      https://github.com/jinhyk21/git_extentions/pull/new/feature",
+      "remote: ",
+      "To https://github.com/jinhyk21/git_extentions",
+      " * [new branch]      feature -> feature"
+    ].join("\n");
+    assert.strictEqual(findMergeRequestUrl(output), "https://github.com/jinhyk21/git_extentions/pull/new/feature");
+  });
+
+  it("falls back to a non-bare-repository URL when no keyword matches", () => {
+    const output = "remote: https://git.example.com/some/custom/hint/page\nTo https://git.example.com/org/repo";
+    assert.strictEqual(findMergeRequestUrl(output), "https://git.example.com/some/custom/hint/page");
+  });
 });
