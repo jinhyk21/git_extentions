@@ -4,7 +4,7 @@
   "description": "A multi-repository Git workspace manager for VS Code.",
   "version": "0.1.0",
   "author": "Ninh Ngọc Tuấn",
-  "publisher": "ninhngoctuan-dev",
+  "publisher": "jinhy",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -17,7 +17,7 @@
     "vscode": "^1.90.0"
   },
   "categories": [
-    "Source Control",
+    "SCM Providers",
     "Other"
   ],
   "keywords": [
