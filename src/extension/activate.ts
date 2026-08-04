@@ -6,13 +6,18 @@ import { registerCommands } from "./commands/registerCommands";
 export function activate(context: vscode.ExtensionContext): void {
   const repositoryManager = new RepositoryManager();
   const treeProvider = new RepositoryTreeProvider(repositoryManager);
+  const debugOutput = vscode.window.createOutputChannel("Git Workspace Pro (Debug)");
+  context.subscriptions.push(debugOutput);
 
   context.subscriptions.push(vscode.window.registerTreeDataProvider("gitWorkspacePro.repositories", treeProvider));
   registerCommands(context, repositoryManager, () => treeProvider.refresh());
 
   const rescanWorkspace = () => {
     const folders = vscode.workspace.workspaceFolders?.map((folder) => folder.uri.fsPath) ?? [];
-    return repositoryManager.refresh(folders).then(() => treeProvider.refresh());
+    return repositoryManager.refresh(folders).then(() => {
+      dumpRepositoryTreeForDebug(repositoryManager.getRepositories(), debugOutput);
+      treeProvider.refresh();
+    });
   };
 
   void rescanWorkspace();
@@ -78,6 +83,22 @@ export function activate(context: vscode.ExtensionContext): void {
 }
 
 export function deactivate(): void {}
+
+function dumpRepositoryTreeForDebug(
+  repositories: readonly RepositoryNode[],
+  output: vscode.OutputChannel,
+  depth = 0
+): void {
+  for (const repository of repositories) {
+    const indent = "  ".repeat(depth);
+    const status = repository.status;
+    const statusSummary = status
+      ? `files=${status.files.length} ahead=${status.ahead} behind=${status.behind} counts=${JSON.stringify(status.counts)}`
+      : `NO STATUS (statusError=${repository.statusError ?? "none"})`;
+    output.appendLine(`${indent}${repository.name} [${repository.rootPath}] -> ${statusSummary}`);
+    dumpRepositoryTreeForDebug(repository.children, output, depth + 1);
+  }
+}
 
 type TreeNode = RepositoryNode | ActionMenuNode | FileGroupNode | ChangedFileNode;
 
@@ -211,7 +232,7 @@ class RepositoryTreeProvider implements vscode.TreeDataProvider<TreeNode> {
 
   public getChildren(element?: TreeNode): TreeNode[] {
     if (!element) {
-      return [...this.repositoryManager.getRepositories()];
+      return this.repositoryManager.getRepositories().filter((repository) => this.hasChanges(repository));
     }
 
     if (this.isFileGroupNode(element)) {
@@ -303,7 +324,30 @@ class RepositoryTreeProvider implements vscode.TreeDataProvider<TreeNode> {
 
   private getRepositoryChildren(repository: RepositoryNode): TreeNode[] {
     const groups = this.getFileGroups(repository);
-    return [...groups, ...repository.children];
+    const children = repository.children.filter((child) => this.hasChanges(child));
+    return [...groups, ...children];
+  }
+
+  /**
+   * A repository is shown in the tree only when it has something to act on:
+   * working tree changes, unpushed/unpulled commits, or an unreadable status
+   * (surfaced as an error rather than hidden). A repository whose own status
+   * is clean is still shown if any nested child repository has changes, so
+   * the tree stays navigable down to them.
+   */
+  private hasChanges(repository: RepositoryNode): boolean {
+    const status = repository.status;
+    if (!status) {
+      // Either still loading or the status read failed — show it either way
+      // rather than silently hiding a repository whose real state is unknown.
+      return true;
+    }
+
+    if (status.files.length > 0 || status.ahead > 0 || status.behind > 0) {
+      return true;
+    }
+
+    return repository.children.some((child) => this.hasChanges(child));
   }
 
   private getFileGroups(repository: RepositoryNode): FileGroupNode[] {

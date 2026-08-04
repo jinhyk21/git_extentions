@@ -75,6 +75,9 @@ export function getConflictResolutionHtml(webview: Webview, filePath: string, se
     border-radius: 4px;
     overflow: hidden;
   }
+  .conflict-block.unresolved {
+    border-color: var(--vscode-gitDecoration-conflictingResourceForeground, #d9534f);
+  }
   .conflict-columns {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -126,6 +129,10 @@ export function getConflictResolutionHtml(webview: Webview, filePath: string, se
     background: var(--vscode-button-background);
     color: var(--vscode-button-foreground);
   }
+  #saveButton:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
   .result-section {
     display: flex;
     flex-direction: column;
@@ -163,6 +170,8 @@ export function getConflictResolutionHtml(webview: Webview, filePath: string, se
   <h1 id="title"></h1>
   <div class="toolbar">
     <span class="status-line" id="remainingStatus"></span>
+    <button class="secondary" id="acceptAllOursButton">Accept All Current</button>
+    <button class="secondary" id="acceptAllTheirsButton">Accept All Incoming</button>
     <button class="secondary" id="cancelButton">Cancel</button>
     <button id="saveButton">Save &amp; Mark Resolved</button>
   </div>
@@ -198,8 +207,13 @@ function getClientScript(): string {
   const resultArea = document.getElementById('result');
   const remainingStatus = document.getElementById('remainingStatus');
 
+  // No default choice — every conflict block starts unresolved so the user
+  // must explicitly pick a side (or "both") for each one before saving.
+  // Auto-picking "ours" here previously caused unresolved conflicts to be
+  // silently saved as "keep my version" without the user ever choosing.
   const choices = new Map();
   let conflictIndex = 0;
+  let totalConflicts = 0;
 
   function createTextBlock(tagName, text, className) {
     const element = document.createElement(tagName);
@@ -225,11 +239,12 @@ function getClientScript(): string {
       const currentIndex = conflictIndex;
       conflictIndex += 1;
       if (!choices.has(currentIndex)) {
-        choices.set(currentIndex, 'ours');
+        choices.set(currentIndex, null);
       }
 
       const block = document.createElement('div');
       block.className = 'conflict-block';
+      block.dataset.blockIndex = String(currentIndex);
 
       const columns = document.createElement('div');
       columns.className = 'conflict-columns';
@@ -247,6 +262,7 @@ function getClientScript(): string {
       segmentsRoot.appendChild(block);
     }
 
+    totalConflicts = conflictIndex;
     refreshActionStates();
   }
 
@@ -273,18 +289,30 @@ function getClientScript(): string {
 
   function refreshActionStates() {
     const buttons = segmentsRoot.querySelectorAll('.conflict-actions button');
-    let resolvedCount = 0;
     for (const button of buttons) {
       const index = Number(button.dataset.index);
       const isActive = choices.get(index) === button.dataset.choice;
       button.classList.toggle('active', isActive);
     }
-    for (const value of choices.values()) {
-      if (value) {
+
+    const blocks = segmentsRoot.querySelectorAll('.conflict-block');
+    let resolvedCount = 0;
+    for (const block of blocks) {
+      const index = Number(block.dataset.blockIndex);
+      const isResolved = Boolean(choices.get(index));
+      block.classList.toggle('unresolved', !isResolved);
+      if (isResolved) {
         resolvedCount += 1;
       }
     }
-    remainingStatus.textContent = resolvedCount + ' / ' + choices.size + ' conflicts resolved';
+
+    remainingStatus.textContent = resolvedCount + ' / ' + totalConflicts + ' conflicts resolved';
+
+    const saveButton = document.getElementById('saveButton');
+    saveButton.disabled = resolvedCount < totalConflicts;
+    saveButton.title = saveButton.disabled
+      ? 'Resolve every conflicting section before saving'
+      : '';
   }
 
   function rebuildResult() {
@@ -321,7 +349,22 @@ function getClientScript(): string {
     resultArea.value = lines.join('\\n');
   }
 
+  function acceptAll(choice) {
+    for (let index = 0; index < totalConflicts; index += 1) {
+      choices.set(index, choice);
+    }
+    refreshActionStates();
+    rebuildResult();
+  }
+
+  document.getElementById('acceptAllOursButton').addEventListener('click', () => acceptAll('ours'));
+  document.getElementById('acceptAllTheirsButton').addEventListener('click', () => acceptAll('theirs'));
+
   document.getElementById('saveButton').addEventListener('click', () => {
+    const unresolvedCount = totalConflicts - [...choices.values()].filter(Boolean).length;
+    if (unresolvedCount > 0) {
+      return;
+    }
     vscodeApi.postMessage({ type: 'save', content: resultArea.value });
   });
 
