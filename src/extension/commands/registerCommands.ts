@@ -1,7 +1,18 @@
 import * as vscode from "vscode";
 import path from "node:path";
 import type { RepositoryManager } from "../../core/repository/RepositoryManager";
-import type { GitChangedFile, RepositoryNode } from "../../shared/types/repository";
+import { ConflictResolutionPanel } from "../webview/ConflictResolutionPanel";
+import { HistoryPanel } from "../webview/HistoryPanel";
+import { buildCompareUrl } from "./buildCompareUrl";
+import {
+  findMergeRequestUrl,
+  getRepositoryFromActionTarget,
+  isChangedFileCommandNode,
+  isRepositoryCommandNode,
+  type ActionMenuCommandNode,
+  type ChangedFileCommandNode,
+  type RepositoryCommandNode
+} from "./commandGuards";
 
 export function registerCommands(
   context: vscode.ExtensionContext,
@@ -44,14 +55,38 @@ export function registerCommands(
         `${node.file.path} (Working Tree)`
       );
     }),
-    vscode.commands.registerCommand("gitWorkspacePro.stageFile", async (node: ChangedFileCommandNode) => {
+    vscode.commands.registerCommand("gitWorkspacePro.resolveConflict", async (node: ChangedFileCommandNode) => {
       if (!isChangedFileCommandNode(node)) {
         return;
       }
 
-      await repositoryManager.stageFile(node.repository.rootPath, node.file.path);
-      await refreshWorkspace(repositoryManager, refreshTree);
+      await ConflictResolutionPanel.open(repositoryManager, node.repository.rootPath, node.file.path, () =>
+        refreshWorkspace(repositoryManager, refreshTree)
+      );
     }),
+    vscode.commands.registerCommand("gitWorkspacePro.showHistory", async (node: RepositoryCommandNode) => {
+      if (!isRepositoryCommandNode(node)) {
+        return;
+      }
+
+      await HistoryPanel.open(repositoryManager, node.rootPath, node.name);
+    }),
+    vscode.commands.registerCommand(
+      "gitWorkspacePro.stageFile",
+      async (node: ChangedFileCommandNode, selectedNodes?: ChangedFileCommandNode[]) => {
+        const nodes = (selectedNodes ?? [node]).filter(isChangedFileCommandNode);
+        const first = nodes[0];
+        if (!first) {
+          return;
+        }
+
+        const repository = first.repository;
+        const filePaths = nodes.filter((entry) => entry.repository.rootPath === repository.rootPath).map((entry) => entry.file.path);
+
+        await repositoryManager.stageFile(repository.rootPath, filePaths);
+        await refreshWorkspace(repositoryManager, refreshTree);
+      }
+    ),
     vscode.commands.registerCommand("gitWorkspacePro.unstageFile", async (node: ChangedFileCommandNode) => {
       if (!isChangedFileCommandNode(node)) {
         return;
@@ -98,6 +133,20 @@ export function registerCommands(
       await runRepositoryOperation(repositoryManager, refreshTree, "Stage all", node, () =>
         repositoryManager.stageAll(node.rootPath)
       );
+    }),
+    vscode.commands.registerCommand("gitWorkspacePro.restoreAll", async (node: RepositoryCommandNode) => {
+      if (!isRepositoryCommandNode(node)) {
+        return;
+      }
+
+      await restoreAllRepository(repositoryManager, refreshTree, node);
+    }),
+    vscode.commands.registerCommand("gitWorkspacePro.deleteBranch", async (node: RepositoryCommandNode) => {
+      if (!isRepositoryCommandNode(node)) {
+        return;
+      }
+
+      await deleteBranch(repositoryManager, refreshTree, node);
     }),
     vscode.commands.registerCommand("gitWorkspacePro.commit", async (node: RepositoryCommandNode) => {
       if (!isRepositoryCommandNode(node)) {
@@ -197,28 +246,14 @@ export function registerCommands(
         return;
       }
 
-      const branch = await pickBranch(repositoryManager, node);
-      if (!branch) {
-        return;
-      }
-
-      await runRepositoryOperation(repositoryManager, refreshTree, "Merge branch", node, () =>
-        repositoryManager.mergeBranch(node.rootPath, branch)
-      );
+      await mergeBranch(repositoryManager, refreshTree, node);
     }),
     vscode.commands.registerCommand("gitWorkspacePro.rebaseBranch", async (node: RepositoryCommandNode) => {
       if (!isRepositoryCommandNode(node)) {
         return;
       }
 
-      const branch = await pickBranch(repositoryManager, node);
-      if (!branch) {
-        return;
-      }
-
-      await runRepositoryOperation(repositoryManager, refreshTree, "Rebase branch", node, () =>
-        repositoryManager.rebaseBranch(node.rootPath, branch)
-      );
+      await rebaseBranch(repositoryManager, refreshTree, node);
     })
   );
 }
@@ -232,6 +267,7 @@ async function refreshWorkspace(repositoryManager: RepositoryManager, refreshTre
 type RepositoryAction =
   | "stageAll"
   | "unstageAll"
+  | "restoreAll"
   | "commit"
   | "fetch"
   | "pull"
@@ -239,72 +275,18 @@ type RepositoryAction =
   | "push"
   | "checkoutBranch"
   | "createBranch"
+  | "deleteBranch"
   | "mergeBranch"
   | "rebaseBranch"
   | "stashPush"
-  | "stashPop";
-
-type ActionMenuCommandNode = {
-  readonly type: "actionMenu";
-  readonly repository: RepositoryNode;
-};
+  | "stashPop"
+  | "showHistory";
 
 type RepositoryActionOption = {
   readonly action: RepositoryAction;
   readonly label: string;
   readonly description: string;
 };
-
-type ChangedFileCommandNode = {
-  readonly type: "changedFile";
-  readonly repository: RepositoryNode;
-  readonly file: GitChangedFile;
-};
-
-function isChangedFileCommandNode(node: unknown): node is ChangedFileCommandNode {
-  return (
-    typeof node === "object" &&
-    node !== null &&
-    "type" in node &&
-    node.type === "changedFile" &&
-    "repository" in node &&
-    "file" in node
-  );
-}
-
-function isActionMenuCommandNode(node: unknown): node is ActionMenuCommandNode {
-  return (
-    typeof node === "object" &&
-    node !== null &&
-    "type" in node &&
-    node.type === "actionMenu" &&
-    "repository" in node
-  );
-}
-
-function getRepositoryFromActionTarget(node: unknown): RepositoryCommandNode | undefined {
-  if (isRepositoryCommandNode(node)) {
-    return node;
-  }
-
-  if (isActionMenuCommandNode(node)) {
-    return node.repository;
-  }
-
-  return undefined;
-}
-
-type RepositoryCommandNode = RepositoryNode;
-
-function isRepositoryCommandNode(node: unknown): node is RepositoryCommandNode {
-  return (
-    typeof node === "object" &&
-    node !== null &&
-    "rootPath" in node &&
-    "name" in node &&
-    "children" in node
-  );
-}
 
 async function pickBranch(repositoryManager: RepositoryManager, repository: RepositoryCommandNode): Promise<string | undefined> {
   const branches = await repositoryManager.listBranches(repository.rootPath);
@@ -359,7 +341,7 @@ async function pushRepository(
       }
     );
     await refreshWorkspace(repositoryManager, refreshTree);
-    await showMergeRequestLinkIfPresent(pushOutput);
+    await showMergeRequestLinkIfPresent(repositoryManager, repository, pushOutput);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     vscode.window.showErrorMessage(`Push failed: ${message}`);
@@ -367,15 +349,24 @@ async function pushRepository(
   }
 }
 
-async function showMergeRequestLinkIfPresent(pushOutput: string): Promise<void> {
-  const mergeRequestUrl = findMergeRequestUrl(pushOutput);
+async function showMergeRequestLinkIfPresent(
+  repositoryManager: RepositoryManager,
+  repository: RepositoryCommandNode,
+  pushOutput: string
+): Promise<void> {
+  const mergeRequestUrl =
+    findMergeRequestUrl(pushOutput) ?? (await buildFallbackCompareUrl(repositoryManager, repository));
+
   if (!mergeRequestUrl) {
     vscode.window.showInformationMessage("Push completed.");
     return;
   }
 
+  // Modal so the merge/pull request prompt stays on screen until the user
+  // acts on it, instead of auto-dismissing like a regular notification toast.
   const action = await vscode.window.showInformationMessage(
-    "Push completed. Merge request link is ready.",
+    "Push completed. A merge/pull request link is ready.",
+    { modal: true },
     "Open Merge Request"
   );
 
@@ -384,15 +375,38 @@ async function showMergeRequestLinkIfPresent(pushOutput: string): Promise<void> 
   }
 }
 
-function findMergeRequestUrl(output: string): string | undefined {
-  const urls = output.match(/https?:\/\/[^\s)>]+/g) ?? [];
-  return urls.find((url) => /merge_requests|pull\/new|compare|pull-request/i.test(url));
+/**
+ * When pushing to a branch that already exists on the remote, GitHub/GitLab
+ * print no "create a pull/merge request" hint in the push output — that
+ * hint only appears for a brand-new branch. This builds the same
+ * compare/merge-request URL directly from the remote + branch name instead,
+ * so the "Open Merge Request" prompt is offered consistently either way.
+ */
+async function buildFallbackCompareUrl(
+  repositoryManager: RepositoryManager,
+  repository: RepositoryCommandNode
+): Promise<string | undefined> {
+  const [remoteUrl, branch] = await Promise.all([
+    repositoryManager.getRemoteUrl(repository.rootPath),
+    repositoryManager.getCurrentBranch(repository.rootPath)
+  ]);
+
+  if (!remoteUrl || !branch) {
+    return undefined;
+  }
+
+  return buildCompareUrl(remoteUrl, branch);
 }
 
 async function pickRepositoryAction(repository: RepositoryCommandNode): Promise<RepositoryAction | undefined> {
   const options: RepositoryActionOption[] = [
     { action: "stageAll", label: "Stage All", description: "Add all changed files to index" },
     { action: "unstageAll", label: "Unstage All", description: "Remove all staged files from index" },
+    {
+      action: "restoreAll",
+      label: "Restore All",
+      description: "Discard all working tree changes and remove untracked files"
+    },
     { action: "commit", label: "Commit", description: "Create commit for staged files" },
     { action: "fetch", label: "Fetch", description: "Fetch all remotes and prune" },
     { action: "pull", label: "Pull", description: "Pull current branch" },
@@ -400,10 +414,12 @@ async function pickRepositoryAction(repository: RepositoryCommandNode): Promise<
     { action: "push", label: "Push", description: "Push current branch" },
     { action: "checkoutBranch", label: "Checkout Branch", description: "Switch current repository branch" },
     { action: "createBranch", label: "Create Branch", description: "Create and switch to new branch" },
+    { action: "deleteBranch", label: "Delete Branch", description: "Delete a local branch" },
     { action: "mergeBranch", label: "Merge Branch", description: "Merge selected branch into current branch" },
     { action: "rebaseBranch", label: "Rebase Onto Branch", description: "Rebase current branch onto selected branch" },
     { action: "stashPush", label: "Stash Push", description: "Stash tracked and untracked changes" },
-    { action: "stashPop", label: "Stash Pop", description: "Apply latest stash and drop it" }
+    { action: "stashPop", label: "Stash Pop", description: "Apply latest stash and drop it" },
+    { action: "showHistory", label: "Show History", description: "View commit history and graph" }
   ];
 
   const selected = await vscode.window.showQuickPick(options, {
@@ -430,6 +446,9 @@ async function runRepositoryAction(
       await runRepositoryOperation(repositoryManager, refreshTree, "Unstage all", repository, () =>
         repositoryManager.unstageAll(repository.rootPath)
       );
+      return;
+    case "restoreAll":
+      await restoreAllRepository(repositoryManager, refreshTree, repository);
       return;
     case "commit":
       await commitRepository(repositoryManager, refreshTree, repository);
@@ -460,25 +479,94 @@ async function runRepositoryAction(
     case "createBranch":
       await createBranch(repositoryManager, refreshTree, repository);
       return;
+    case "deleteBranch":
+      await deleteBranch(repositoryManager, refreshTree, repository);
+      return;
     case "mergeBranch":
-      await runBranchOperation(repositoryManager, refreshTree, repository, "Merge branch", (branch) =>
-        repositoryManager.mergeBranch(repository.rootPath, branch)
-      );
+      await mergeBranch(repositoryManager, refreshTree, repository);
       return;
     case "rebaseBranch":
-      await runBranchOperation(repositoryManager, refreshTree, repository, "Rebase branch", (branch) =>
-        repositoryManager.rebaseBranch(repository.rootPath, branch)
-      );
+      await rebaseBranch(repositoryManager, refreshTree, repository);
       return;
     case "stashPush":
       await stashPush(repositoryManager, refreshTree, repository);
       return;
     case "stashPop":
-      await runRepositoryOperation(repositoryManager, refreshTree, "Stash pop", repository, () =>
-        repositoryManager.stashPop(repository.rootPath)
-      );
+      await stashPop(repositoryManager, refreshTree, repository);
+      return;
+    case "showHistory":
+      await HistoryPanel.open(repositoryManager, repository.rootPath, repository.name);
       return;
   }
+}
+
+async function confirmDestructiveAction(message: string, confirmLabel: string): Promise<boolean> {
+  const answer = await vscode.window.showWarningMessage(message, { modal: true }, confirmLabel);
+  return answer === confirmLabel;
+}
+
+async function mergeBranch(
+  repositoryManager: RepositoryManager,
+  refreshTree: () => void,
+  repository: RepositoryCommandNode
+): Promise<void> {
+  const branch = await pickBranch(repositoryManager, repository);
+  if (!branch) {
+    return;
+  }
+
+  const confirmed = await confirmDestructiveAction(
+    `Merge "${branch}" into the current branch of ${repository.name}? This may create conflicts.`,
+    "Merge"
+  );
+  if (!confirmed) {
+    return;
+  }
+
+  await runRepositoryOperation(repositoryManager, refreshTree, "Merge branch", repository, () =>
+    repositoryManager.mergeBranch(repository.rootPath, branch)
+  );
+}
+
+async function rebaseBranch(
+  repositoryManager: RepositoryManager,
+  refreshTree: () => void,
+  repository: RepositoryCommandNode
+): Promise<void> {
+  const branch = await pickBranch(repositoryManager, repository);
+  if (!branch) {
+    return;
+  }
+
+  const confirmed = await confirmDestructiveAction(
+    `Rebase the current branch of ${repository.name} onto "${branch}"? This rewrites local history and may create conflicts.`,
+    "Rebase"
+  );
+  if (!confirmed) {
+    return;
+  }
+
+  await runRepositoryOperation(repositoryManager, refreshTree, "Rebase branch", repository, () =>
+    repositoryManager.rebaseBranch(repository.rootPath, branch)
+  );
+}
+
+async function stashPop(
+  repositoryManager: RepositoryManager,
+  refreshTree: () => void,
+  repository: RepositoryCommandNode
+): Promise<void> {
+  const confirmed = await confirmDestructiveAction(
+    `Apply and drop the latest stash in ${repository.name}? This may create conflicts and the stash entry cannot be recovered after it is dropped.`,
+    "Stash Pop"
+  );
+  if (!confirmed) {
+    return;
+  }
+
+  await runRepositoryOperation(repositoryManager, refreshTree, "Stash pop", repository, () =>
+    repositoryManager.stashPop(repository.rootPath)
+  );
 }
 
 async function commitRepository(
@@ -536,6 +624,49 @@ async function runBranchOperation(
   }
 
   await runRepositoryOperation(repositoryManager, refreshTree, operationName, repository, () => operation(branch));
+}
+
+async function restoreAllRepository(
+  repositoryManager: RepositoryManager,
+  refreshTree: () => void,
+  repository: RepositoryCommandNode
+): Promise<void> {
+  const answer = await vscode.window.showWarningMessage(
+    `Discard all working tree changes and delete untracked files in ${repository.name}?`,
+    { modal: true },
+    "Restore All"
+  );
+  if (answer !== "Restore All") {
+    return;
+  }
+
+  await runRepositoryOperation(repositoryManager, refreshTree, "Restore all", repository, () =>
+    repositoryManager.restoreAll(repository.rootPath)
+  );
+}
+
+async function deleteBranch(
+  repositoryManager: RepositoryManager,
+  refreshTree: () => void,
+  repository: RepositoryCommandNode
+): Promise<void> {
+  const branch = await pickBranch(repositoryManager, repository);
+  if (!branch) {
+    return;
+  }
+
+  const answer = await vscode.window.showWarningMessage(
+    `Delete branch "${branch}" in ${repository.name}?`,
+    { modal: true },
+    "Delete Branch"
+  );
+  if (answer !== "Delete Branch") {
+    return;
+  }
+
+  await runRepositoryOperation(repositoryManager, refreshTree, "Delete branch", repository, () =>
+    repositoryManager.deleteBranch(repository.rootPath, branch)
+  );
 }
 
 async function stashPush(

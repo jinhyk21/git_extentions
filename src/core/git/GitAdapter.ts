@@ -1,38 +1,66 @@
-import { ErrorCodes } from "../../shared/constants/errorCodes";
-import type { GitChangedFile, GitFileStatusKind, RepositoryStatusSummary } from "../../shared/types/repository";
+import type { RepositoryStatusSummary } from "../../shared/types/repository";
+import type { CommitLogEntry } from "../../shared/types/history";
 import { GitWorkspaceError } from "../errors/GitWorkspaceError";
-import { GitProcessRunner } from "./GitProcessRunner";
+import { classifyGitError } from "./classifyGitError";
+import { GIT_LOG_PRETTY, parseGitLog } from "./parseGitLog";
+import { GitProcessRunner, type GitProcessResult } from "./GitProcessRunner";
+import { parseGitStatus } from "./parseGitStatus";
 
 export class GitAdapter {
   public constructor(private readonly runner = new GitProcessRunner()) {}
 
+  private async exec(args: readonly string[], cwd: string, timeoutMs?: number): Promise<GitProcessResult> {
+    try {
+      return await this.runner.run(args, cwd, timeoutMs);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new GitWorkspaceError(classifyGitError(message), message, error);
+    }
+  }
+
   public async isRepository(path: string): Promise<boolean> {
-    const result = await this.runner.run(["rev-parse", "--is-inside-work-tree"], path, 5_000);
+    const result = await this.exec(["rev-parse", "--is-inside-work-tree"], path, 5_000);
     return result.exitCode === 0 && result.stdout.trim() === "true";
   }
 
   public async getStatus(path: string): Promise<RepositoryStatusSummary> {
-    const branchResult = await this.runner.run(["branch", "--show-current"], path, 5_000);
-    const statusResult = await this.runner.run(["status", "--porcelain=v1"], path, 10_000);
+    const branchResult = await this.exec(["branch", "--show-current"], path, 5_000);
+    const statusResult = await this.exec(["status", "--porcelain=v1", "--branch"], path, 10_000);
 
     if (statusResult.exitCode !== 0) {
-      throw new GitWorkspaceError(ErrorCodes.RepositoryNotFound, statusResult.stderr.trim() || "Repository status failed");
+      throw this.toGitError(statusResult.stderr, "Repository status failed");
     }
 
-    return this.parseStatus(branchResult.stdout.trim() || "DETACHED", statusResult.stdout);
+    const { hasUpstream, ...summary } = parseGitStatus(branchResult.stdout.trim() || "DETACHED", statusResult.stdout);
+    if (hasUpstream) {
+      return summary;
+    }
+
+    const unpushedCommits = await this.countUnpushedCommits(path);
+    return { ...summary, ahead: unpushedCommits };
   }
 
-  public async stageFile(repositoryPath: string, filePath: string): Promise<void> {
-    const result = await this.runner.run(["add", "--", filePath], repositoryPath, 10_000);
+  private async countUnpushedCommits(path: string): Promise<number> {
+    const result = await this.exec(["rev-list", "--count", "HEAD"], path, 5_000);
     if (result.exitCode !== 0) {
-      throw new GitWorkspaceError(ErrorCodes.UnknownGitError, result.stderr.trim() || "Stage file failed");
+      return 0;
+    }
+
+    return Number.parseInt(result.stdout.trim(), 10) || 0;
+  }
+
+  public async stageFile(repositoryPath: string, filePaths: string | readonly string[]): Promise<void> {
+    const paths = Array.isArray(filePaths) ? filePaths : [filePaths];
+    const result = await this.exec(["add", "--", ...paths], repositoryPath, 10_000);
+    if (result.exitCode !== 0) {
+      throw this.toGitError(result.stderr, "Stage file failed");
     }
   }
 
   public async unstageFile(repositoryPath: string, filePath: string): Promise<void> {
-    const result = await this.runner.run(["restore", "--staged", "--", filePath], repositoryPath, 10_000);
+    const result = await this.exec(["restore", "--staged", "--", filePath], repositoryPath, 10_000);
     if (result.exitCode !== 0) {
-      throw new GitWorkspaceError(ErrorCodes.UnknownGitError, result.stderr.trim() || "Unstage file failed");
+      throw this.toGitError(result.stderr, "Unstage file failed");
     }
   }
 
@@ -68,10 +96,21 @@ export class GitAdapter {
     return this.runForOutputOrThrow(["push", "-u", "origin", "HEAD"], repositoryPath, "Push failed", 60_000);
   }
 
+  public async getRemoteUrl(repositoryPath: string, remoteName = "origin"): Promise<string | undefined> {
+    const result = await this.exec(["remote", "get-url", remoteName], repositoryPath, 5_000);
+    return result.exitCode === 0 ? result.stdout.trim() : undefined;
+  }
+
+  public async getCurrentBranch(repositoryPath: string): Promise<string | undefined> {
+    const result = await this.exec(["branch", "--show-current"], repositoryPath, 5_000);
+    const branch = result.stdout.trim();
+    return result.exitCode === 0 && branch.length > 0 ? branch : undefined;
+  }
+
   public async listBranches(repositoryPath: string): Promise<readonly string[]> {
-    const result = await this.runner.run(["branch", "--format=%(refname:short)"], repositoryPath, 10_000);
+    const result = await this.exec(["branch", "--format=%(refname:short)"], repositoryPath, 10_000);
     if (result.exitCode !== 0) {
-      throw new GitWorkspaceError(ErrorCodes.UnknownGitError, result.stderr.trim() || "List branches failed");
+      throw this.toGitError(result.stderr, "List branches failed");
     }
 
     return result.stdout.split(/\r?\n/).map((branch) => branch.trim()).filter(Boolean);
@@ -104,71 +143,53 @@ export class GitAdapter {
     await this.runOrThrow(["stash", "pop"], repositoryPath, "Stash pop failed", 30_000);
   }
 
-  private parseStatus(branch: string, output: string): RepositoryStatusSummary {
-    const lines = output.split(/\r?\n/).filter(Boolean);
-    const files: GitChangedFile[] = [];
-
-    for (const line of lines) {
-      const indexStatus = line[0] ?? " ";
-      const workTreeStatus = line[1] ?? " ";
-      const filePath = line.slice(3);
-
-      if (line.startsWith("??")) {
-        files.push(this.createChangedFile(filePath, "untracked", indexStatus, workTreeStatus));
-        continue;
-      }
-
-      if (["U", "A", "D"].includes(indexStatus) && ["U", "A", "D"].includes(workTreeStatus)) {
-        files.push(this.createChangedFile(filePath, "conflicted", indexStatus, workTreeStatus));
-        continue;
-      }
-
-      if (indexStatus !== " ") {
-        files.push(this.createChangedFile(filePath, "staged", indexStatus, workTreeStatus));
-      }
-
-      if (workTreeStatus !== " ") {
-        files.push(this.createChangedFile(filePath, "unstaged", indexStatus, workTreeStatus));
-      }
-    }
-
-    return {
-      branch,
-      files,
-      counts: {
-        staged: files.filter((file) => file.kind === "staged").length,
-        unstaged: files.filter((file) => file.kind === "unstaged").length,
-        untracked: files.filter((file) => file.kind === "untracked").length,
-        conflicted: files.filter((file) => file.kind === "conflicted").length
-      }
-    };
+  public async restoreAll(repositoryPath: string): Promise<void> {
+    await this.runOrThrow(["restore", "--staged", "--worktree", "."], repositoryPath, "Restore all failed", 30_000);
+    await this.runOrThrow(["clean", "-fd"], repositoryPath, "Clean untracked files failed", 30_000);
   }
 
-  private createChangedFile(
-    rawPath: string,
-    kind: GitFileStatusKind,
-    indexStatus: string,
-    workTreeStatus: string
-  ): GitChangedFile {
-    const renameSeparator = " -> ";
-    const renameIndex = rawPath.indexOf(renameSeparator);
+  public async deleteBranch(repositoryPath: string, branch: string): Promise<void> {
+    await this.runOrThrow(["branch", "-D", branch], repositoryPath, "Delete branch failed");
+  }
 
-    if (renameIndex === -1) {
-      return {
-        path: rawPath,
-        kind,
-        indexStatus,
-        workTreeStatus
-      };
+  public async readConflictStage(repositoryPath: string, filePath: string, stage: 1 | 2 | 3): Promise<string> {
+    const result = await this.exec(["show", `:${stage}:${filePath}`], repositoryPath, 10_000);
+    return result.exitCode === 0 ? result.stdout : "";
+  }
+
+  public async markResolved(repositoryPath: string, filePath: string): Promise<void> {
+    await this.runOrThrow(["add", "--", filePath], repositoryPath, "Mark resolved failed");
+  }
+
+  public async getLog(repositoryPath: string, maxCount = 300): Promise<readonly CommitLogEntry[]> {
+    const result = await this.exec(
+      ["log", "--all", "--date-order", `--max-count=${maxCount}`, GIT_LOG_PRETTY],
+      repositoryPath,
+      20_000
+    );
+
+    if (result.exitCode !== 0) {
+      // An empty repository (no commits yet) is not an error condition.
+      if (/does not have any commits yet|unknown revision/i.test(result.stderr)) {
+        return [];
+      }
+      throw this.toGitError(result.stderr, "Read commit history failed");
     }
 
-    return {
-      originalPath: rawPath.slice(0, renameIndex),
-      path: rawPath.slice(renameIndex + renameSeparator.length),
-      kind,
-      indexStatus,
-      workTreeStatus
-    };
+    return parseGitLog(result.stdout);
+  }
+
+  public async getCommitDiffFiles(repositoryPath: string, commitHash: string): Promise<readonly string[]> {
+    const result = await this.exec(
+      ["diff-tree", "--no-commit-id", "--name-only", "-r", commitHash],
+      repositoryPath,
+      10_000
+    );
+    if (result.exitCode !== 0) {
+      throw this.toGitError(result.stderr, "Read commit files failed");
+    }
+
+    return result.stdout.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
   }
 
   private async runOrThrow(
@@ -177,9 +198,9 @@ export class GitAdapter {
     fallbackMessage: string,
     timeoutMs = 10_000
   ): Promise<void> {
-    const result = await this.runner.run(args, repositoryPath, timeoutMs);
+    const result = await this.exec(args, repositoryPath, timeoutMs);
     if (result.exitCode !== 0) {
-      throw new GitWorkspaceError(ErrorCodes.UnknownGitError, result.stderr.trim() || fallbackMessage);
+      throw this.toGitError(result.stderr, fallbackMessage);
     }
   }
 
@@ -189,12 +210,17 @@ export class GitAdapter {
     fallbackMessage: string,
     timeoutMs = 10_000
   ): Promise<string> {
-    const result = await this.runner.run(args, repositoryPath, timeoutMs);
+    const result = await this.exec(args, repositoryPath, timeoutMs);
     const output = [result.stdout, result.stderr].filter(Boolean).join("\n");
     if (result.exitCode !== 0) {
-      throw new GitWorkspaceError(ErrorCodes.UnknownGitError, output.trim() || fallbackMessage);
+      throw this.toGitError(result.stderr || output, fallbackMessage);
     }
 
     return output;
+  }
+
+  private toGitError(stderr: string, fallbackMessage: string): GitWorkspaceError {
+    const message = stderr.trim() || fallbackMessage;
+    return new GitWorkspaceError(classifyGitError(message), message);
   }
 }

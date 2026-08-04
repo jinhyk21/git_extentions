@@ -2,8 +2,17 @@
   "name": "git-workspace-pro",
   "displayName": "Git Workspace Pro",
   "description": "A multi-repository Git workspace manager for VS Code.",
-  "version": "0.0.1",
-  "publisher": "internal",
+  "version": "0.1.0",
+  "author": "Ninh Ngọc Tuấn",
+  "publisher": "ninhngoctuan-dev",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jinhyk21/git_extentions"
+  },
+  "bugs": {
+    "url": "https://github.com/jinhyk21/git_extentions/issues"
+  },
   "engines": {
     "vscode": "^1.90.0"
   },
@@ -11,9 +20,12 @@
     "Source Control",
     "Other"
   ],
-  "activationEvents": [
-    "onView:gitWorkspacePro.repositories",
-    "onCommand:gitWorkspacePro.refreshRepositories"
+  "keywords": [
+    "git",
+    "multi-repo",
+    "monorepo",
+    "merge conflict",
+    "source control"
   ],
   "icon": "media/logo.png",
   "main": "./dist/extension/activate.js",
@@ -62,6 +74,11 @@
         "icon": "$(diff)"
       },
       {
+        "command": "gitWorkspacePro.resolveConflict",
+        "title": "Resolve Conflict",
+        "icon": "$(git-merge)"
+      },
+      {
         "command": "gitWorkspacePro.discardFile",
         "title": "Discard File",
         "icon": "$(discard)"
@@ -75,6 +92,11 @@
         "command": "gitWorkspacePro.unstageAll",
         "title": "Unstage All",
         "icon": "$(remove)"
+      },
+      {
+        "command": "gitWorkspacePro.restoreAll",
+        "title": "Restore All",
+        "icon": "$(discard)"
       },
       {
         "command": "gitWorkspacePro.commit",
@@ -112,6 +134,11 @@
         "icon": "$(git-branch-create)"
       },
       {
+        "command": "gitWorkspacePro.deleteBranch",
+        "title": "Delete Branch",
+        "icon": "$(trash)"
+      },
+      {
         "command": "gitWorkspacePro.mergeBranch",
         "title": "Merge Branch",
         "icon": "$(git-merge)"
@@ -135,6 +162,11 @@
         "command": "gitWorkspacePro.showRepositoryActions",
         "title": "Repository Actions",
         "icon": "$(ellipsis)"
+      },
+      {
+        "command": "gitWorkspacePro.showHistory",
+        "title": "Show History",
+        "icon": "$(history)"
       }
     ],
     "menus": {
@@ -146,7 +178,12 @@
         },
         {
           "command": "gitWorkspacePro.openDiff",
-          "when": "view == gitWorkspacePro.repositories && viewItem =~ /changedFile/",
+          "when": "view == gitWorkspacePro.repositories && viewItem =~ /changedFile/ && viewItem != changedFile.conflicted",
+          "group": "inline@2"
+        },
+        {
+          "command": "gitWorkspacePro.resolveConflict",
+          "when": "view == gitWorkspacePro.repositories && viewItem == changedFile.conflicted",
           "group": "inline@2"
         },
         {
@@ -173,6 +210,21 @@
           "command": "gitWorkspacePro.showRepositoryActions",
           "when": "view == gitWorkspacePro.repositories && viewItem == repository",
           "group": "navigation@1"
+        },
+        {
+          "command": "gitWorkspacePro.restoreAll",
+          "when": "view == gitWorkspacePro.repositories && viewItem == repository",
+          "group": "inline@5"
+        },
+        {
+          "command": "gitWorkspacePro.deleteBranch",
+          "when": "view == gitWorkspacePro.repositories && viewItem == repository",
+          "group": "inline@6"
+        },
+        {
+          "command": "gitWorkspacePro.showHistory",
+          "when": "view == gitWorkspacePro.repositories && viewItem == repository",
+          "group": "inline@7"
         }
       ]
     }
@@ -181,14 +233,20 @@
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "lint": "eslint src --ext ts",
-    "test": "npm run compile"
+    "pretest:unit": "tsc -p ./tsconfig.test.json",
+    "test:unit": "mocha",
+    "test": "npm run compile && npm run lint && npm run test:unit"
   },
   "devDependencies": {
+    "@types/mocha": "^10.0.10",
     "@types/node": "^20.19.43",
     "@types/vscode": "^1.90.0",
     "@typescript-eslint/eslint-plugin": "^7.16.0",
     "@typescript-eslint/parser": "^7.16.0",
+    "@vscode/test-electron": "^3.1.0",
     "eslint": "^8.57.0",
+    "glob": "^10.5.0",
+    "mocha": "^11.8.0",
     "typescript": "^5.5.4"
   }
 }
