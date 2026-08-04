@@ -20,8 +20,8 @@ export class RepositoryManager {
     return this.repositories;
   }
 
-  public async stageFile(repositoryPath: string, filePath: string): Promise<void> {
-    await this.gitAdapter.stageFile(repositoryPath, filePath);
+  public async stageFile(repositoryPath: string, filePaths: string | readonly string[]): Promise<void> {
+    await this.gitAdapter.stageFile(repositoryPath, filePaths);
   }
 
   public async unstageFile(repositoryPath: string, filePath: string): Promise<void> {
@@ -86,6 +86,14 @@ export class RepositoryManager {
 
   public async stashPop(repositoryPath: string): Promise<void> {
     await this.gitAdapter.stashPop(repositoryPath);
+  }
+
+  public async restoreAll(repositoryPath: string): Promise<void> {
+    await this.gitAdapter.restoreAll(repositoryPath);
+  }
+
+  public async deleteBranch(repositoryPath: string, branch: string): Promise<void> {
+    await this.gitAdapter.deleteBranch(repositoryPath, branch);
   }
 
   private async loadStatusRecursive(repository: RepositoryNode): Promise<RepositoryNode> {

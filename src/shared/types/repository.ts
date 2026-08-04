@@ -11,6 +11,8 @@ export type GitChangedFile = {
 export type RepositoryStatusSummary = {
   readonly branch: string;
   readonly files: readonly GitChangedFile[];
+  readonly ahead: number;
+  readonly behind: number;
   readonly counts: {
     readonly staged: number;
     readonly unstaged: number;

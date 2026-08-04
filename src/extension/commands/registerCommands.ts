@@ -44,14 +44,22 @@ export function registerCommands(
         `${node.file.path} (Working Tree)`
       );
     }),
-    vscode.commands.registerCommand("gitWorkspacePro.stageFile", async (node: ChangedFileCommandNode) => {
-      if (!isChangedFileCommandNode(node)) {
-        return;
-      }
+    vscode.commands.registerCommand(
+      "gitWorkspacePro.stageFile",
+      async (node: ChangedFileCommandNode, selectedNodes?: ChangedFileCommandNode[]) => {
+        const nodes = (selectedNodes ?? [node]).filter(isChangedFileCommandNode);
+        const first = nodes[0];
+        if (!first) {
+          return;
+        }
 
-      await repositoryManager.stageFile(node.repository.rootPath, node.file.path);
-      await refreshWorkspace(repositoryManager, refreshTree);
-    }),
+        const repository = first.repository;
+        const filePaths = nodes.filter((entry) => entry.repository.rootPath === repository.rootPath).map((entry) => entry.file.path);
+
+        await repositoryManager.stageFile(repository.rootPath, filePaths);
+        await refreshWorkspace(repositoryManager, refreshTree);
+      }
+    ),
     vscode.commands.registerCommand("gitWorkspacePro.unstageFile", async (node: ChangedFileCommandNode) => {
       if (!isChangedFileCommandNode(node)) {
         return;
@@ -98,6 +106,20 @@ export function registerCommands(
       await runRepositoryOperation(repositoryManager, refreshTree, "Stage all", node, () =>
         repositoryManager.stageAll(node.rootPath)
       );
+    }),
+    vscode.commands.registerCommand("gitWorkspacePro.restoreAll", async (node: RepositoryCommandNode) => {
+      if (!isRepositoryCommandNode(node)) {
+        return;
+      }
+
+      await restoreAllRepository(repositoryManager, refreshTree, node);
+    }),
+    vscode.commands.registerCommand("gitWorkspacePro.deleteBranch", async (node: RepositoryCommandNode) => {
+      if (!isRepositoryCommandNode(node)) {
+        return;
+      }
+
+      await deleteBranch(repositoryManager, refreshTree, node);
     }),
     vscode.commands.registerCommand("gitWorkspacePro.commit", async (node: RepositoryCommandNode) => {
       if (!isRepositoryCommandNode(node)) {
@@ -232,6 +254,7 @@ async function refreshWorkspace(repositoryManager: RepositoryManager, refreshTre
 type RepositoryAction =
   | "stageAll"
   | "unstageAll"
+  | "restoreAll"
   | "commit"
   | "fetch"
   | "pull"
@@ -239,6 +262,7 @@ type RepositoryAction =
   | "push"
   | "checkoutBranch"
   | "createBranch"
+  | "deleteBranch"
   | "mergeBranch"
   | "rebaseBranch"
   | "stashPush"
@@ -393,6 +417,11 @@ async function pickRepositoryAction(repository: RepositoryCommandNode): Promise<
   const options: RepositoryActionOption[] = [
     { action: "stageAll", label: "Stage All", description: "Add all changed files to index" },
     { action: "unstageAll", label: "Unstage All", description: "Remove all staged files from index" },
+    {
+      action: "restoreAll",
+      label: "Restore All",
+      description: "Discard all working tree changes and remove untracked files"
+    },
     { action: "commit", label: "Commit", description: "Create commit for staged files" },
     { action: "fetch", label: "Fetch", description: "Fetch all remotes and prune" },
     { action: "pull", label: "Pull", description: "Pull current branch" },
@@ -400,6 +429,7 @@ async function pickRepositoryAction(repository: RepositoryCommandNode): Promise<
     { action: "push", label: "Push", description: "Push current branch" },
     { action: "checkoutBranch", label: "Checkout Branch", description: "Switch current repository branch" },
     { action: "createBranch", label: "Create Branch", description: "Create and switch to new branch" },
+    { action: "deleteBranch", label: "Delete Branch", description: "Delete a local branch" },
     { action: "mergeBranch", label: "Merge Branch", description: "Merge selected branch into current branch" },
     { action: "rebaseBranch", label: "Rebase Onto Branch", description: "Rebase current branch onto selected branch" },
     { action: "stashPush", label: "Stash Push", description: "Stash tracked and untracked changes" },
@@ -431,6 +461,9 @@ async function runRepositoryAction(
         repositoryManager.unstageAll(repository.rootPath)
       );
       return;
+    case "restoreAll":
+      await restoreAllRepository(repositoryManager, refreshTree, repository);
+      return;
     case "commit":
       await commitRepository(repositoryManager, refreshTree, repository);
       return;
@@ -459,6 +492,9 @@ async function runRepositoryAction(
       return;
     case "createBranch":
       await createBranch(repositoryManager, refreshTree, repository);
+      return;
+    case "deleteBranch":
+      await deleteBranch(repositoryManager, refreshTree, repository);
       return;
     case "mergeBranch":
       await runBranchOperation(repositoryManager, refreshTree, repository, "Merge branch", (branch) =>
@@ -536,6 +572,49 @@ async function runBranchOperation(
   }
 
   await runRepositoryOperation(repositoryManager, refreshTree, operationName, repository, () => operation(branch));
+}
+
+async function restoreAllRepository(
+  repositoryManager: RepositoryManager,
+  refreshTree: () => void,
+  repository: RepositoryCommandNode
+): Promise<void> {
+  const answer = await vscode.window.showWarningMessage(
+    `Discard all working tree changes and delete untracked files in ${repository.name}?`,
+    { modal: true },
+    "Restore All"
+  );
+  if (answer !== "Restore All") {
+    return;
+  }
+
+  await runRepositoryOperation(repositoryManager, refreshTree, "Restore all", repository, () =>
+    repositoryManager.restoreAll(repository.rootPath)
+  );
+}
+
+async function deleteBranch(
+  repositoryManager: RepositoryManager,
+  refreshTree: () => void,
+  repository: RepositoryCommandNode
+): Promise<void> {
+  const branch = await pickBranch(repositoryManager, repository);
+  if (!branch) {
+    return;
+  }
+
+  const answer = await vscode.window.showWarningMessage(
+    `Delete branch "${branch}" in ${repository.name}?`,
+    { modal: true },
+    "Delete Branch"
+  );
+  if (answer !== "Delete Branch") {
+    return;
+  }
+
+  await runRepositoryOperation(repositoryManager, refreshTree, "Delete branch", repository, () =>
+    repositoryManager.deleteBranch(repository.rootPath, branch)
+  );
 }
 
 async function stashPush(

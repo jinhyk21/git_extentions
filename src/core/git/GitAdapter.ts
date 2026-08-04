@@ -13,17 +13,33 @@ export class GitAdapter {
 
   public async getStatus(path: string): Promise<RepositoryStatusSummary> {
     const branchResult = await this.runner.run(["branch", "--show-current"], path, 5_000);
-    const statusResult = await this.runner.run(["status", "--porcelain=v1"], path, 10_000);
+    const statusResult = await this.runner.run(["status", "--porcelain=v1", "--branch"], path, 10_000);
 
     if (statusResult.exitCode !== 0) {
       throw new GitWorkspaceError(ErrorCodes.RepositoryNotFound, statusResult.stderr.trim() || "Repository status failed");
     }
 
-    return this.parseStatus(branchResult.stdout.trim() || "DETACHED", statusResult.stdout);
+    const { hasUpstream, ...summary } = this.parseStatus(branchResult.stdout.trim() || "DETACHED", statusResult.stdout);
+    if (hasUpstream) {
+      return summary;
+    }
+
+    const unpushedCommits = await this.countUnpushedCommits(path);
+    return { ...summary, ahead: unpushedCommits };
   }
 
-  public async stageFile(repositoryPath: string, filePath: string): Promise<void> {
-    const result = await this.runner.run(["add", "--", filePath], repositoryPath, 10_000);
+  private async countUnpushedCommits(path: string): Promise<number> {
+    const result = await this.runner.run(["rev-list", "--count", "HEAD"], path, 5_000);
+    if (result.exitCode !== 0) {
+      return 0;
+    }
+
+    return Number.parseInt(result.stdout.trim(), 10) || 0;
+  }
+
+  public async stageFile(repositoryPath: string, filePaths: string | readonly string[]): Promise<void> {
+    const paths = Array.isArray(filePaths) ? filePaths : [filePaths];
+    const result = await this.runner.run(["add", "--", ...paths], repositoryPath, 10_000);
     if (result.exitCode !== 0) {
       throw new GitWorkspaceError(ErrorCodes.UnknownGitError, result.stderr.trim() || "Stage file failed");
     }
@@ -104,11 +120,32 @@ export class GitAdapter {
     await this.runOrThrow(["stash", "pop"], repositoryPath, "Stash pop failed", 30_000);
   }
 
-  private parseStatus(branch: string, output: string): RepositoryStatusSummary {
+  public async restoreAll(repositoryPath: string): Promise<void> {
+    await this.runOrThrow(["restore", "--staged", "--worktree", "."], repositoryPath, "Restore all failed", 30_000);
+    await this.runOrThrow(["clean", "-fd"], repositoryPath, "Clean untracked files failed", 30_000);
+  }
+
+  public async deleteBranch(repositoryPath: string, branch: string): Promise<void> {
+    await this.runOrThrow(["branch", "-D", branch], repositoryPath, "Delete branch failed");
+  }
+
+  private parseStatus(branch: string, output: string): RepositoryStatusSummary & { hasUpstream: boolean } {
     const lines = output.split(/\r?\n/).filter(Boolean);
     const files: GitChangedFile[] = [];
+    let ahead = 0;
+    let behind = 0;
+    let hasUpstream = false;
 
     for (const line of lines) {
+      if (line.startsWith("## ")) {
+        hasUpstream = line.includes("...");
+        const aheadMatch = /ahead (\d+)/.exec(line);
+        const behindMatch = /behind (\d+)/.exec(line);
+        ahead = aheadMatch ? Number(aheadMatch[1]) : 0;
+        behind = behindMatch ? Number(behindMatch[1]) : 0;
+        continue;
+      }
+
       const indexStatus = line[0] ?? " ";
       const workTreeStatus = line[1] ?? " ";
       const filePath = line.slice(3);
@@ -135,6 +172,9 @@ export class GitAdapter {
     return {
       branch,
       files,
+      ahead,
+      behind,
+      hasUpstream,
       counts: {
         staged: files.filter((file) => file.kind === "staged").length,
         unstaged: files.filter((file) => file.kind === "unstaged").length,

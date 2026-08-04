@@ -77,6 +77,11 @@
         "icon": "$(remove)"
       },
       {
+        "command": "gitWorkspacePro.restoreAll",
+        "title": "Restore All",
+        "icon": "$(discard)"
+      },
+      {
         "command": "gitWorkspacePro.commit",
         "title": "Commit",
         "icon": "$(git-commit)"
@@ -110,6 +115,11 @@
         "command": "gitWorkspacePro.createBranch",
         "title": "Create Branch",
         "icon": "$(git-branch-create)"
+      },
+      {
+        "command": "gitWorkspacePro.deleteBranch",
+        "title": "Delete Branch",
+        "icon": "$(trash)"
       },
       {
         "command": "gitWorkspacePro.mergeBranch",
@@ -173,6 +183,16 @@
           "command": "gitWorkspacePro.showRepositoryActions",
           "when": "view == gitWorkspacePro.repositories && viewItem == repository",
           "group": "navigation@1"
+        },
+        {
+          "command": "gitWorkspacePro.restoreAll",
+          "when": "view == gitWorkspacePro.repositories && viewItem == repository",
+          "group": "inline@5"
+        },
+        {
+          "command": "gitWorkspacePro.deleteBranch",
+          "when": "view == gitWorkspacePro.repositories && viewItem == repository",
+          "group": "inline@6"
         }
       ]
     }
