@@ -18,6 +18,8 @@ function isWebviewOutboundMessage(value: unknown): value is WebviewOutboundMessa
     return true;
   }
 
+  
+
   return value.type === "save" && "content" in value && typeof value.content === "string";
 }
 
