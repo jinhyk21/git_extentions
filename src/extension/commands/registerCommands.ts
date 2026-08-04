@@ -355,8 +355,11 @@ async function showMergeRequestLinkIfPresent(pushOutput: string): Promise<void> 
     return;
   }
 
+  // Modal so the merge/pull request prompt stays on screen until the user
+  // acts on it, instead of auto-dismissing like a regular notification toast.
   const action = await vscode.window.showInformationMessage(
-    "Push completed. Merge request link is ready.",
+    "Push completed. A merge/pull request link is ready.",
+    { modal: true },
     "Open Merge Request"
   );
 
