@@ -143,4 +143,61 @@ describe("GitAdapter (integration)", () => {
       }
     );
   });
+
+  it("getLog returns commits newest-first with parent hashes and HEAD ref", async () => {
+    writeFile(repoDir, "second.txt", "content\n");
+    git(repoDir, ["add", "."]);
+    git(repoDir, ["commit", "-q", "-m", "second commit"]);
+
+    const log = await adapter.getLog(repoDir);
+
+    assert.strictEqual(log.length, 2);
+    assert.strictEqual(log[0]?.subject, "second commit");
+    assert.strictEqual(log[1]?.subject, "initial commit");
+    assert.deepStrictEqual(log[0]?.parentHashes, [log[1]?.hash]);
+    assert.ok(log[0]?.refs.some((ref) => ref.isHead));
+  });
+
+  it("getLog reports two parent hashes for a merge commit", async () => {
+    git(repoDir, ["checkout", "-q", "-b", "feature"]);
+    writeFile(repoDir, "feature.txt", "content\n");
+    git(repoDir, ["add", "."]);
+    git(repoDir, ["commit", "-q", "-m", "feature commit"]);
+
+    git(repoDir, ["checkout", "-q", "main"]);
+    writeFile(repoDir, "main.txt", "content\n");
+    git(repoDir, ["add", "."]);
+    git(repoDir, ["commit", "-q", "-m", "main commit"]);
+
+    git(repoDir, ["merge", "--no-ff", "-q", "-m", "merge feature", "feature"]);
+
+    const log = await adapter.getLog(repoDir);
+    const mergeCommit = log.find((entry) => entry.subject === "merge feature");
+
+    assert.strictEqual(mergeCommit?.parentHashes.length, 2);
+  });
+
+  it("getLog returns an empty array for a repository with no commits", async () => {
+    const emptyRepoDir = mkdtempSync(path.join(tmpdir(), "gwp-empty-"));
+    git(emptyRepoDir, ["init", "--quiet", "--initial-branch=main"]);
+
+    try {
+      const log = await adapter.getLog(emptyRepoDir);
+      assert.deepStrictEqual(log, []);
+    } finally {
+      rmSync(emptyRepoDir, { recursive: true, force: true });
+    }
+  });
+
+  it("getCommitDiffFiles lists the files changed by a commit", async () => {
+    writeFile(repoDir, "changed.txt", "content\n");
+    git(repoDir, ["add", "."]);
+    git(repoDir, ["commit", "-q", "-m", "add changed.txt"]);
+
+    const log = await adapter.getLog(repoDir);
+    const latestHash = log[0]?.hash ?? "";
+    const files = await adapter.getCommitDiffFiles(repoDir, latestHash);
+
+    assert.deepStrictEqual(files, ["changed.txt"]);
+  });
 });

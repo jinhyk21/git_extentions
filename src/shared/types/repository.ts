@@ -30,4 +30,5 @@ export type RepositoryNode = {
   readonly isNested: boolean;
   readonly isSubmodule: boolean;
   readonly status?: RepositoryStatusSummary;
+  readonly statusError?: string;
 };

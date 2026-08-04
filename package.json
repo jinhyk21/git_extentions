@@ -2,15 +2,30 @@
   "name": "git-workspace-pro",
   "displayName": "Git Workspace Pro",
   "description": "A multi-repository Git workspace manager for VS Code.",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "author": "Ninh Ngọc Tuấn",
-  "publisher": "internal",
+  "publisher": "ninhngoctuan-dev",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jinhyk21/git_extentions"
+  },
+  "bugs": {
+    "url": "https://github.com/jinhyk21/git_extentions/issues"
+  },
   "engines": {
     "vscode": "^1.90.0"
   },
   "categories": [
     "Source Control",
     "Other"
+  ],
+  "keywords": [
+    "git",
+    "multi-repo",
+    "monorepo",
+    "merge conflict",
+    "source control"
   ],
   "icon": "media/logo.png",
   "main": "./dist/extension/activate.js",
@@ -57,6 +72,11 @@
         "command": "gitWorkspacePro.openDiff",
         "title": "Open Diff",
         "icon": "$(diff)"
+      },
+      {
+        "command": "gitWorkspacePro.resolveConflict",
+        "title": "Resolve Conflict",
+        "icon": "$(git-merge)"
       },
       {
         "command": "gitWorkspacePro.discardFile",
@@ -142,6 +162,11 @@
         "command": "gitWorkspacePro.showRepositoryActions",
         "title": "Repository Actions",
         "icon": "$(ellipsis)"
+      },
+      {
+        "command": "gitWorkspacePro.showHistory",
+        "title": "Show History",
+        "icon": "$(history)"
       }
     ],
     "menus": {
@@ -153,7 +178,12 @@
         },
         {
           "command": "gitWorkspacePro.openDiff",
-          "when": "view == gitWorkspacePro.repositories && viewItem =~ /changedFile/",
+          "when": "view == gitWorkspacePro.repositories && viewItem =~ /changedFile/ && viewItem != changedFile.conflicted",
+          "group": "inline@2"
+        },
+        {
+          "command": "gitWorkspacePro.resolveConflict",
+          "when": "view == gitWorkspacePro.repositories && viewItem == changedFile.conflicted",
           "group": "inline@2"
         },
         {
@@ -190,6 +220,11 @@
           "command": "gitWorkspacePro.deleteBranch",
           "when": "view == gitWorkspacePro.repositories && viewItem == repository",
           "group": "inline@6"
+        },
+        {
+          "command": "gitWorkspacePro.showHistory",
+          "when": "view == gitWorkspacePro.repositories && viewItem == repository",
+          "group": "inline@7"
         }
       ]
     }

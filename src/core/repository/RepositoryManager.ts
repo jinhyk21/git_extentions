@@ -1,4 +1,6 @@
+import path from "node:path";
 import type { RepositoryNode } from "../../shared/types/repository";
+import type { CommitLogEntry } from "../../shared/types/history";
 import { GitAdapter } from "../git/GitAdapter";
 import { RepositoryScanner } from "./RepositoryScanner";
 
@@ -23,17 +25,28 @@ export class RepositoryManager {
    * a full multi-repo rescan.
    */
   public async refreshRepositoryStatus(repositoryPath: string): Promise<void> {
-    const status = await this.gitAdapter.getStatus(repositoryPath).catch(() => undefined);
-    this.repositories = this.repositories.map((repository) => this.applyStatus(repository, repositoryPath, status));
+    let status: RepositoryNode["status"];
+    let statusError: string | undefined;
+
+    try {
+      status = await this.gitAdapter.getStatus(repositoryPath);
+    } catch (error) {
+      statusError = error instanceof Error ? error.message : String(error);
+    }
+
+    this.repositories = this.repositories.map((repository) =>
+      this.applyStatus(repository, repositoryPath, status, statusError)
+    );
   }
 
   private applyStatus(
     repository: RepositoryNode,
     targetPath: string,
-    status: RepositoryNode["status"]
+    status: RepositoryNode["status"],
+    statusError: string | undefined
   ): RepositoryNode {
     if (repository.rootPath === targetPath) {
-      return { ...repository, status };
+      return { ...repository, status, statusError };
     }
 
     if (repository.children.length === 0) {
@@ -42,13 +55,13 @@ export class RepositoryManager {
 
     return {
       ...repository,
-      children: repository.children.map((child) => this.applyStatus(child, targetPath, status))
+      children: repository.children.map((child) => this.applyStatus(child, targetPath, status, statusError))
     };
   }
 
   public findRepositoryForPath(filePath: string): RepositoryNode | undefined {
     const candidates = this.flatten(this.repositories).filter(
-      (repository) => filePath === repository.rootPath || filePath.startsWith(`${repository.rootPath}/`)
+      (repository) => filePath === repository.rootPath || filePath.startsWith(`${repository.rootPath}${path.sep}`)
     );
 
     return candidates.sort((left, right) => right.rootPath.length - left.rootPath.length)[0];
@@ -138,6 +151,22 @@ export class RepositoryManager {
     await this.gitAdapter.deleteBranch(repositoryPath, branch);
   }
 
+  public async readConflictStage(repositoryPath: string, filePath: string, stage: 1 | 2 | 3): Promise<string> {
+    return this.gitAdapter.readConflictStage(repositoryPath, filePath, stage);
+  }
+
+  public async markResolved(repositoryPath: string, filePath: string): Promise<void> {
+    await this.gitAdapter.markResolved(repositoryPath, filePath);
+  }
+
+  public async getLog(repositoryPath: string, maxCount?: number): Promise<readonly CommitLogEntry[]> {
+    return this.gitAdapter.getLog(repositoryPath, maxCount);
+  }
+
+  public async getCommitDiffFiles(repositoryPath: string, commitHash: string): Promise<readonly string[]> {
+    return this.gitAdapter.getCommitDiffFiles(repositoryPath, commitHash);
+  }
+
   private async loadStatusRecursive(repository: RepositoryNode): Promise<RepositoryNode> {
     const children = await Promise.all(repository.children.map((child) => this.loadStatusRecursive(child)));
 
@@ -145,12 +174,15 @@ export class RepositoryManager {
       return {
         ...repository,
         children,
-        status: await this.gitAdapter.getStatus(repository.rootPath)
+        status: await this.gitAdapter.getStatus(repository.rootPath),
+        statusError: undefined
       };
-    } catch {
+    } catch (error) {
       return {
         ...repository,
-        children
+        children,
+        status: undefined,
+        statusError: error instanceof Error ? error.message : String(error)
       };
     }
   }

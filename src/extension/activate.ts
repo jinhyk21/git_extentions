@@ -165,7 +165,7 @@ class RepositoryTreeProvider implements vscode.TreeDataProvider<TreeNode> {
   private getRepositoryStateColor(repository: RepositoryNode): vscode.ThemeColor | undefined {
     const status = repository.status;
     if (!status) {
-      return undefined;
+      return repository.statusError ? new vscode.ThemeColor("gitDecoration.conflictingResourceForeground") : undefined;
     }
 
     if (status.counts.conflicted > 0) {
@@ -246,7 +246,7 @@ class RepositoryTreeProvider implements vscode.TreeDataProvider<TreeNode> {
   private getRepositoryDescription(repository: RepositoryNode): string {
     const status = repository.status;
     if (!status) {
-      return "Loading…";
+      return repository.statusError ? "Status unavailable" : "Loading…";
     }
 
     const segments: string[] = [];
@@ -280,7 +280,9 @@ class RepositoryTreeProvider implements vscode.TreeDataProvider<TreeNode> {
   private getRepositoryTooltip(repository: RepositoryNode): string {
     const status = repository.status;
     if (!status) {
-      return repository.rootPath;
+      return repository.statusError
+        ? `${repository.rootPath}\nStatus unavailable: ${repository.statusError}`
+        : repository.rootPath;
     }
 
     const lines = [

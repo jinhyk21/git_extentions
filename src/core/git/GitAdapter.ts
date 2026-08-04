@@ -1,6 +1,8 @@
 import type { RepositoryStatusSummary } from "../../shared/types/repository";
+import type { CommitLogEntry } from "../../shared/types/history";
 import { GitWorkspaceError } from "../errors/GitWorkspaceError";
 import { classifyGitError } from "./classifyGitError";
+import { GIT_LOG_PRETTY, parseGitLog } from "./parseGitLog";
 import { GitProcessRunner, type GitProcessResult } from "./GitProcessRunner";
 import { parseGitStatus } from "./parseGitStatus";
 
@@ -137,6 +139,46 @@ export class GitAdapter {
 
   public async deleteBranch(repositoryPath: string, branch: string): Promise<void> {
     await this.runOrThrow(["branch", "-D", branch], repositoryPath, "Delete branch failed");
+  }
+
+  public async readConflictStage(repositoryPath: string, filePath: string, stage: 1 | 2 | 3): Promise<string> {
+    const result = await this.exec(["show", `:${stage}:${filePath}`], repositoryPath, 10_000);
+    return result.exitCode === 0 ? result.stdout : "";
+  }
+
+  public async markResolved(repositoryPath: string, filePath: string): Promise<void> {
+    await this.runOrThrow(["add", "--", filePath], repositoryPath, "Mark resolved failed");
+  }
+
+  public async getLog(repositoryPath: string, maxCount = 300): Promise<readonly CommitLogEntry[]> {
+    const result = await this.exec(
+      ["log", "--all", "--date-order", `--max-count=${maxCount}`, GIT_LOG_PRETTY],
+      repositoryPath,
+      20_000
+    );
+
+    if (result.exitCode !== 0) {
+      // An empty repository (no commits yet) is not an error condition.
+      if (/does not have any commits yet|unknown revision/i.test(result.stderr)) {
+        return [];
+      }
+      throw this.toGitError(result.stderr, "Read commit history failed");
+    }
+
+    return parseGitLog(result.stdout);
+  }
+
+  public async getCommitDiffFiles(repositoryPath: string, commitHash: string): Promise<readonly string[]> {
+    const result = await this.exec(
+      ["diff-tree", "--no-commit-id", "--name-only", "-r", commitHash],
+      repositoryPath,
+      10_000
+    );
+    if (result.exitCode !== 0) {
+      throw this.toGitError(result.stderr, "Read commit files failed");
+    }
+
+    return result.stdout.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
   }
 
   private async runOrThrow(
