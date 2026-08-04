@@ -409,8 +409,8 @@ async function showMergeRequestLinkIfPresent(pushOutput: string): Promise<void> 
 }
 
 function findMergeRequestUrl(output: string): string | undefined {
-  const urls = output.match(/https?:\/\/[^\s)>]+/g) ?? [];
-  return urls.find((url) => /merge_requests|pull\/new|compare|pull-request/i.test(url));
+  const urls = output.match(/https?:\/\/[^\s)>\]]+/g) ?? [];
+  return urls.find((url) => /merge[_-]requests|pull\/new|compare|pull-request/i.test(url)) ?? urls[0];
 }
 
 async function pickRepositoryAction(repository: RepositoryCommandNode): Promise<RepositoryAction | undefined> {
