@@ -20,7 +20,7 @@ export class GitProcessRunner {
 
       const timer = setTimeout(() => {
         child.kill();
-        reject(new Error(`Git command timed out after ${timeoutMs}ms`));
+        reject(new Error(`timed out after ${timeoutMs}ms`));
       }, timeoutMs);
 
       child.stdout.on("data", (chunk: Buffer) => {

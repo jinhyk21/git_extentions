@@ -10,29 +10,70 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(vscode.window.registerTreeDataProvider("gitWorkspacePro.repositories", treeProvider));
   registerCommands(context, repositoryManager, () => treeProvider.refresh());
 
-  const refresh = () => {
+  const rescanWorkspace = () => {
     const folders = vscode.workspace.workspaceFolders?.map((folder) => folder.uri.fsPath) ?? [];
     return repositoryManager.refresh(folders).then(() => treeProvider.refresh());
   };
 
-  void refresh();
+  void rescanWorkspace();
 
-  let refreshTimer: NodeJS.Timeout | undefined;
-  const scheduleRefresh = () => {
-    if (refreshTimer) {
-      clearTimeout(refreshTimer);
+  // Per-repository debounce: editing repo A must never delay or repeat-trigger
+  // a status refresh for repo B, and must never re-scan the whole workspace.
+  const pendingStatusRefreshes = new Map<string, NodeJS.Timeout>();
+  const scheduleStatusRefresh = (repositoryRootPath: string) => {
+    const existing = pendingStatusRefreshes.get(repositoryRootPath);
+    if (existing) {
+      clearTimeout(existing);
     }
-    refreshTimer = setTimeout(() => void refresh(), 500);
+
+    pendingStatusRefreshes.set(
+      repositoryRootPath,
+      setTimeout(() => {
+        pendingStatusRefreshes.delete(repositoryRootPath);
+        void repositoryManager.refreshRepositoryStatus(repositoryRootPath).then(() => treeProvider.refresh());
+      }, 400)
+    );
+  };
+
+  let rescanTimer: NodeJS.Timeout | undefined;
+  const scheduleRescan = () => {
+    if (rescanTimer) {
+      clearTimeout(rescanTimer);
+    }
+    rescanTimer = setTimeout(() => void rescanWorkspace(), 500);
+  };
+
+  const onWorkspaceFileChanged = (uri: vscode.Uri) => {
+    // Ignore .git/ internals (index, logs, refs) — they churn on every git
+    // command and would otherwise re-trigger a refresh for our own operations.
+    if (/[/\\]\.git([/\\]|$)/.test(uri.fsPath)) {
+      return;
+    }
+
+    const repository = repositoryManager.findRepositoryForPath(uri.fsPath);
+    if (repository) {
+      scheduleStatusRefresh(repository.rootPath);
+    }
   };
 
   const watcher = vscode.workspace.createFileSystemWatcher("**/*");
   context.subscriptions.push(
     watcher,
-    watcher.onDidChange(scheduleRefresh),
-    watcher.onDidCreate(scheduleRefresh),
-    watcher.onDidDelete(scheduleRefresh),
-    vscode.workspace.onDidChangeWorkspaceFolders(scheduleRefresh),
-    { dispose: () => refreshTimer && clearTimeout(refreshTimer) }
+    watcher.onDidChange(onWorkspaceFileChanged),
+    watcher.onDidCreate(onWorkspaceFileChanged),
+    watcher.onDidDelete(onWorkspaceFileChanged),
+    vscode.workspace.onDidChangeWorkspaceFolders(scheduleRescan),
+    {
+      dispose: () => {
+        if (rescanTimer) {
+          clearTimeout(rescanTimer);
+        }
+        for (const timer of pendingStatusRefreshes.values()) {
+          clearTimeout(timer);
+        }
+        pendingStatusRefreshes.clear();
+      }
+    }
   );
 }
 
@@ -115,15 +156,31 @@ class RepositoryTreeProvider implements vscode.TreeDataProvider<TreeNode> {
     );
     item.id = `repo:${element.rootPath}`;
     item.description = this.getRepositoryDescription(element);
-    item.tooltip = element.rootPath;
+    item.tooltip = this.getRepositoryTooltip(element);
     item.contextValue = "repository";
-    item.iconPath = new vscode.ThemeIcon(
-      "repo",
-      (element.status?.counts.conflicted ?? 0) > 0
-        ? new vscode.ThemeColor("gitDecoration.conflictingResourceForeground")
-        : undefined
-    );
+    item.iconPath = new vscode.ThemeIcon("repo", this.getRepositoryStateColor(element));
     return item;
+  }
+
+  private getRepositoryStateColor(repository: RepositoryNode): vscode.ThemeColor | undefined {
+    const status = repository.status;
+    if (!status) {
+      return undefined;
+    }
+
+    if (status.counts.conflicted > 0) {
+      return new vscode.ThemeColor("gitDecoration.conflictingResourceForeground");
+    }
+
+    if (status.counts.staged + status.counts.unstaged + status.counts.untracked > 0) {
+      return new vscode.ThemeColor("gitDecoration.modifiedResourceForeground");
+    }
+
+    if (status.ahead > 0 || status.behind > 0) {
+      return new vscode.ThemeColor("gitDecoration.untrackedResourceForeground");
+    }
+
+    return undefined;
   }
 
   private getStatusIconId(kind: GitFileStatusKind): string {
@@ -154,7 +211,7 @@ class RepositoryTreeProvider implements vscode.TreeDataProvider<TreeNode> {
 
   public getChildren(element?: TreeNode): TreeNode[] {
     if (!element) {
-      return this.repositoryManager.getRepositories().filter((repository) => this.hasChanges(repository));
+      return [...this.repositoryManager.getRepositories()];
     }
 
     if (this.isFileGroupNode(element)) {
@@ -176,61 +233,75 @@ class RepositoryTreeProvider implements vscode.TreeDataProvider<TreeNode> {
     return this.getRepositoryChildren(element);
   }
 
-  private hasChanges(repository: RepositoryNode): boolean {
-    const status = repository.status;
-    if (!status) {
-      return true;
-    }
-
-    if (status.files.length > 0 || status.ahead > 0 || status.behind > 0) {
-      return true;
-    }
-
-    return repository.children.some((child) => this.hasChanges(child));
-  }
-
   private getRepositoryLabel(repository: RepositoryNode): string {
+    return repository.name;
+  }
+
+  /**
+   * A short, glanceable state string shown next to the repository name, e.g.
+   * "Clean", "2 staged, 1 conflict", "↑1 ↓2". This is the primary way a user
+   * tells, without opening the tree, whether a repo has unstaged work,
+   * uncommitted work, unpushed commits, or a conflict.
+   */
+  private getRepositoryDescription(repository: RepositoryNode): string {
     const status = repository.status;
     if (!status) {
-      return repository.name;
+      return "Loading…";
     }
 
-    const parts = [
-      status.counts.staged > 0 ? `+${status.counts.staged}` : "",
-      status.counts.unstaged > 0 ? `~${status.counts.unstaged}` : "",
-      status.counts.untracked > 0 ? `?${status.counts.untracked}` : "",
-      status.counts.conflicted > 0 ? `!${status.counts.conflicted}` : "",
-      status.ahead > 0 ? `↑${status.ahead}` : "",
-      status.behind > 0 ? `↓${status.behind}` : ""
-    ].filter(Boolean);
-
-    return parts.length > 0 ? `${repository.name} (${parts.join(" ")})` : repository.name;
-  }
-
-  private getRepositoryDescription(repository: RepositoryNode): string | undefined {
-    const branch = repository.status?.branch;
-    if (!this.hasNameCollision(repository)) {
-      return branch;
+    const segments: string[] = [];
+    if (status.counts.conflicted > 0) {
+      segments.push(`${status.counts.conflicted} conflict${status.counts.conflicted > 1 ? "s" : ""}`);
+    }
+    if (status.counts.staged > 0) {
+      segments.push(`${status.counts.staged} staged`);
+    }
+    if (status.counts.unstaged > 0) {
+      segments.push(`${status.counts.unstaged} unstaged`);
+    }
+    if (status.counts.untracked > 0) {
+      segments.push(`${status.counts.untracked} untracked`);
     }
 
-    return branch ? `${branch} • ${repository.rootPath}` : repository.rootPath;
+    const syncParts: string[] = [];
+    if (status.ahead > 0) {
+      syncParts.push(`↑${status.ahead}`);
+    }
+    if (status.behind > 0) {
+      syncParts.push(`↓${status.behind}`);
+    }
+
+    const workingTreeLabel = segments.length > 0 ? segments.join(", ") : "Clean";
+    const branchLabel = `${status.branch}${syncParts.length > 0 ? ` ${syncParts.join(" ")}` : ""}`;
+
+    return `${branchLabel} • ${workingTreeLabel}`;
   }
 
-  private hasNameCollision(repository: RepositoryNode): boolean {
-    const all = this.flattenRepositories(this.repositoryManager.getRepositories()).filter((candidate) =>
-      this.hasChanges(candidate)
-    );
-    return all.filter((candidate) => candidate.name === repository.name).length > 1;
-  }
+  private getRepositoryTooltip(repository: RepositoryNode): string {
+    const status = repository.status;
+    if (!status) {
+      return repository.rootPath;
+    }
 
-  private flattenRepositories(repositories: readonly RepositoryNode[]): RepositoryNode[] {
-    return repositories.flatMap((repository) => [repository, ...this.flattenRepositories(repository.children)]);
+    const lines = [
+      repository.rootPath,
+      `Branch: ${status.branch}`,
+      status.ahead > 0 || status.behind > 0
+        ? `Sync: ${status.ahead} ahead, ${status.behind} behind`
+        : "Sync: up to date",
+      `Staged: ${status.counts.staged}  Unstaged: ${status.counts.unstaged}  Untracked: ${status.counts.untracked}`
+    ];
+
+    if (status.counts.conflicted > 0) {
+      lines.push(`⚠ ${status.counts.conflicted} conflicting file${status.counts.conflicted > 1 ? "s" : ""}`);
+    }
+
+    return lines.join("\n");
   }
 
   private getRepositoryChildren(repository: RepositoryNode): TreeNode[] {
     const groups = this.getFileGroups(repository);
-    const children = repository.children.filter((child) => this.hasChanges(child));
-    return [...groups, ...children];
+    return [...groups, ...repository.children];
   }
 
   private getFileGroups(repository: RepositoryNode): FileGroupNode[] {

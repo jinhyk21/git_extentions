@@ -1,25 +1,35 @@
-import { ErrorCodes } from "../../shared/constants/errorCodes";
-import type { GitChangedFile, GitFileStatusKind, RepositoryStatusSummary } from "../../shared/types/repository";
+import type { RepositoryStatusSummary } from "../../shared/types/repository";
 import { GitWorkspaceError } from "../errors/GitWorkspaceError";
-import { GitProcessRunner } from "./GitProcessRunner";
+import { classifyGitError } from "./classifyGitError";
+import { GitProcessRunner, type GitProcessResult } from "./GitProcessRunner";
+import { parseGitStatus } from "./parseGitStatus";
 
 export class GitAdapter {
   public constructor(private readonly runner = new GitProcessRunner()) {}
 
+  private async exec(args: readonly string[], cwd: string, timeoutMs?: number): Promise<GitProcessResult> {
+    try {
+      return await this.runner.run(args, cwd, timeoutMs);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new GitWorkspaceError(classifyGitError(message), message, error);
+    }
+  }
+
   public async isRepository(path: string): Promise<boolean> {
-    const result = await this.runner.run(["rev-parse", "--is-inside-work-tree"], path, 5_000);
+    const result = await this.exec(["rev-parse", "--is-inside-work-tree"], path, 5_000);
     return result.exitCode === 0 && result.stdout.trim() === "true";
   }
 
   public async getStatus(path: string): Promise<RepositoryStatusSummary> {
-    const branchResult = await this.runner.run(["branch", "--show-current"], path, 5_000);
-    const statusResult = await this.runner.run(["status", "--porcelain=v1", "--branch"], path, 10_000);
+    const branchResult = await this.exec(["branch", "--show-current"], path, 5_000);
+    const statusResult = await this.exec(["status", "--porcelain=v1", "--branch"], path, 10_000);
 
     if (statusResult.exitCode !== 0) {
-      throw new GitWorkspaceError(ErrorCodes.RepositoryNotFound, statusResult.stderr.trim() || "Repository status failed");
+      throw this.toGitError(statusResult.stderr, "Repository status failed");
     }
 
-    const { hasUpstream, ...summary } = this.parseStatus(branchResult.stdout.trim() || "DETACHED", statusResult.stdout);
+    const { hasUpstream, ...summary } = parseGitStatus(branchResult.stdout.trim() || "DETACHED", statusResult.stdout);
     if (hasUpstream) {
       return summary;
     }
@@ -29,7 +39,7 @@ export class GitAdapter {
   }
 
   private async countUnpushedCommits(path: string): Promise<number> {
-    const result = await this.runner.run(["rev-list", "--count", "HEAD"], path, 5_000);
+    const result = await this.exec(["rev-list", "--count", "HEAD"], path, 5_000);
     if (result.exitCode !== 0) {
       return 0;
     }
@@ -39,16 +49,16 @@ export class GitAdapter {
 
   public async stageFile(repositoryPath: string, filePaths: string | readonly string[]): Promise<void> {
     const paths = Array.isArray(filePaths) ? filePaths : [filePaths];
-    const result = await this.runner.run(["add", "--", ...paths], repositoryPath, 10_000);
+    const result = await this.exec(["add", "--", ...paths], repositoryPath, 10_000);
     if (result.exitCode !== 0) {
-      throw new GitWorkspaceError(ErrorCodes.UnknownGitError, result.stderr.trim() || "Stage file failed");
+      throw this.toGitError(result.stderr, "Stage file failed");
     }
   }
 
   public async unstageFile(repositoryPath: string, filePath: string): Promise<void> {
-    const result = await this.runner.run(["restore", "--staged", "--", filePath], repositoryPath, 10_000);
+    const result = await this.exec(["restore", "--staged", "--", filePath], repositoryPath, 10_000);
     if (result.exitCode !== 0) {
-      throw new GitWorkspaceError(ErrorCodes.UnknownGitError, result.stderr.trim() || "Unstage file failed");
+      throw this.toGitError(result.stderr, "Unstage file failed");
     }
   }
 
@@ -85,9 +95,9 @@ export class GitAdapter {
   }
 
   public async listBranches(repositoryPath: string): Promise<readonly string[]> {
-    const result = await this.runner.run(["branch", "--format=%(refname:short)"], repositoryPath, 10_000);
+    const result = await this.exec(["branch", "--format=%(refname:short)"], repositoryPath, 10_000);
     if (result.exitCode !== 0) {
-      throw new GitWorkspaceError(ErrorCodes.UnknownGitError, result.stderr.trim() || "List branches failed");
+      throw this.toGitError(result.stderr, "List branches failed");
     }
 
     return result.stdout.split(/\r?\n/).map((branch) => branch.trim()).filter(Boolean);
@@ -129,97 +139,15 @@ export class GitAdapter {
     await this.runOrThrow(["branch", "-D", branch], repositoryPath, "Delete branch failed");
   }
 
-  private parseStatus(branch: string, output: string): RepositoryStatusSummary & { hasUpstream: boolean } {
-    const lines = output.split(/\r?\n/).filter(Boolean);
-    const files: GitChangedFile[] = [];
-    let ahead = 0;
-    let behind = 0;
-    let hasUpstream = false;
-
-    for (const line of lines) {
-      if (line.startsWith("## ")) {
-        hasUpstream = line.includes("...");
-        const aheadMatch = /ahead (\d+)/.exec(line);
-        const behindMatch = /behind (\d+)/.exec(line);
-        ahead = aheadMatch ? Number(aheadMatch[1]) : 0;
-        behind = behindMatch ? Number(behindMatch[1]) : 0;
-        continue;
-      }
-
-      const indexStatus = line[0] ?? " ";
-      const workTreeStatus = line[1] ?? " ";
-      const filePath = line.slice(3);
-
-      if (line.startsWith("??")) {
-        files.push(this.createChangedFile(filePath, "untracked", indexStatus, workTreeStatus));
-        continue;
-      }
-
-      if (["U", "A", "D"].includes(indexStatus) && ["U", "A", "D"].includes(workTreeStatus)) {
-        files.push(this.createChangedFile(filePath, "conflicted", indexStatus, workTreeStatus));
-        continue;
-      }
-
-      if (indexStatus !== " ") {
-        files.push(this.createChangedFile(filePath, "staged", indexStatus, workTreeStatus));
-      }
-
-      if (workTreeStatus !== " ") {
-        files.push(this.createChangedFile(filePath, "unstaged", indexStatus, workTreeStatus));
-      }
-    }
-
-    return {
-      branch,
-      files,
-      ahead,
-      behind,
-      hasUpstream,
-      counts: {
-        staged: files.filter((file) => file.kind === "staged").length,
-        unstaged: files.filter((file) => file.kind === "unstaged").length,
-        untracked: files.filter((file) => file.kind === "untracked").length,
-        conflicted: files.filter((file) => file.kind === "conflicted").length
-      }
-    };
-  }
-
-  private createChangedFile(
-    rawPath: string,
-    kind: GitFileStatusKind,
-    indexStatus: string,
-    workTreeStatus: string
-  ): GitChangedFile {
-    const renameSeparator = " -> ";
-    const renameIndex = rawPath.indexOf(renameSeparator);
-
-    if (renameIndex === -1) {
-      return {
-        path: rawPath,
-        kind,
-        indexStatus,
-        workTreeStatus
-      };
-    }
-
-    return {
-      originalPath: rawPath.slice(0, renameIndex),
-      path: rawPath.slice(renameIndex + renameSeparator.length),
-      kind,
-      indexStatus,
-      workTreeStatus
-    };
-  }
-
   private async runOrThrow(
     args: readonly string[],
     repositoryPath: string,
     fallbackMessage: string,
     timeoutMs = 10_000
   ): Promise<void> {
-    const result = await this.runner.run(args, repositoryPath, timeoutMs);
+    const result = await this.exec(args, repositoryPath, timeoutMs);
     if (result.exitCode !== 0) {
-      throw new GitWorkspaceError(ErrorCodes.UnknownGitError, result.stderr.trim() || fallbackMessage);
+      throw this.toGitError(result.stderr, fallbackMessage);
     }
   }
 
@@ -229,12 +157,17 @@ export class GitAdapter {
     fallbackMessage: string,
     timeoutMs = 10_000
   ): Promise<string> {
-    const result = await this.runner.run(args, repositoryPath, timeoutMs);
+    const result = await this.exec(args, repositoryPath, timeoutMs);
     const output = [result.stdout, result.stderr].filter(Boolean).join("\n");
     if (result.exitCode !== 0) {
-      throw new GitWorkspaceError(ErrorCodes.UnknownGitError, output.trim() || fallbackMessage);
+      throw this.toGitError(result.stderr || output, fallbackMessage);
     }
 
     return output;
+  }
+
+  private toGitError(stderr: string, fallbackMessage: string): GitWorkspaceError {
+    const message = stderr.trim() || fallbackMessage;
+    return new GitWorkspaceError(classifyGitError(message), message);
   }
 }

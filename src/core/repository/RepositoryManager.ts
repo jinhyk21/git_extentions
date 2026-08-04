@@ -16,6 +16,48 @@ export class RepositoryManager {
     return this.repositories;
   }
 
+  /**
+   * Refreshes the git status of a single repository (by root path) in place,
+   * without re-scanning the filesystem for the whole workspace. Use this for
+   * frequent, file-change-triggered updates so editing one repo never forces
+   * a full multi-repo rescan.
+   */
+  public async refreshRepositoryStatus(repositoryPath: string): Promise<void> {
+    const status = await this.gitAdapter.getStatus(repositoryPath).catch(() => undefined);
+    this.repositories = this.repositories.map((repository) => this.applyStatus(repository, repositoryPath, status));
+  }
+
+  private applyStatus(
+    repository: RepositoryNode,
+    targetPath: string,
+    status: RepositoryNode["status"]
+  ): RepositoryNode {
+    if (repository.rootPath === targetPath) {
+      return { ...repository, status };
+    }
+
+    if (repository.children.length === 0) {
+      return repository;
+    }
+
+    return {
+      ...repository,
+      children: repository.children.map((child) => this.applyStatus(child, targetPath, status))
+    };
+  }
+
+  public findRepositoryForPath(filePath: string): RepositoryNode | undefined {
+    const candidates = this.flatten(this.repositories).filter(
+      (repository) => filePath === repository.rootPath || filePath.startsWith(`${repository.rootPath}/`)
+    );
+
+    return candidates.sort((left, right) => right.rootPath.length - left.rootPath.length)[0];
+  }
+
+  private flatten(repositories: readonly RepositoryNode[]): RepositoryNode[] {
+    return repositories.flatMap((repository) => [repository, ...this.flatten(repository.children)]);
+  }
+
   public getRepositories(): readonly RepositoryNode[] {
     return this.repositories;
   }

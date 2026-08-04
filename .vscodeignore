@@ -1,8 +1,12 @@
 node_modules/
 src/
 test/
+out-test/
 .ai/
 docs/
+.github/
 .eslintrc.json
 tsconfig.json
+tsconfig.test.json
+.mocharc.json
 *.map
