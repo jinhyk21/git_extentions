@@ -1,8 +1,8 @@
 {
   "name": "git-workspace-pro",
   "displayName": "Git Workspace Pro",
-  "description": "A multi-repository Git workspace manager for VS Code.",
-  "version": "0.1.3",
+  "description": "%extension.description%",
+  "version": "0.3.0",
   "author": "Ninh Ngọc Tuấn",
   "publisher": "jinhy",
   "license": "MIT",
@@ -15,6 +15,12 @@
   },
   "engines": {
     "vscode": "^1.90.0"
+  },
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "Git Workspace Pro executes repository-changing Git commands and requires a trusted workspace."
+    }
   },
   "categories": [
     "SCM Providers",
@@ -43,132 +49,174 @@
       "gitWorkspacePro": [
         {
           "id": "gitWorkspacePro.repositories",
-          "name": "Repositories"
+          "name": "%view.repositories%"
         }
       ]
     },
     "commands": [
       {
         "command": "gitWorkspacePro.refreshRepositories",
-        "title": "Git Workspace Pro: Refresh Repositories",
+        "title": "%command.refreshRepositories%",
         "icon": "$(refresh)"
       },
       {
         "command": "gitWorkspacePro.openChangedFile",
-        "title": "Open File",
+        "title": "%command.openChangedFile%",
         "icon": "$(go-to-file)"
       },
       {
         "command": "gitWorkspacePro.stageFile",
-        "title": "Stage File",
+        "title": "%command.stageFile%",
         "icon": "$(add)"
       },
       {
         "command": "gitWorkspacePro.unstageFile",
-        "title": "Unstage File",
+        "title": "%command.unstageFile%",
         "icon": "$(remove)"
       },
       {
         "command": "gitWorkspacePro.openDiff",
-        "title": "Open Diff",
+        "title": "%command.openDiff%",
         "icon": "$(diff)"
       },
       {
         "command": "gitWorkspacePro.resolveConflict",
-        "title": "Resolve Conflict",
+        "title": "%command.resolveConflict%",
         "icon": "$(git-merge)"
       },
       {
         "command": "gitWorkspacePro.discardFile",
-        "title": "Discard File",
+        "title": "%command.discardFile%",
         "icon": "$(discard)"
       },
       {
         "command": "gitWorkspacePro.stageAll",
-        "title": "Stage All",
+        "title": "%command.stageAll%",
         "icon": "$(add)"
       },
       {
         "command": "gitWorkspacePro.unstageAll",
-        "title": "Unstage All",
+        "title": "%command.unstageAll%",
         "icon": "$(remove)"
       },
       {
         "command": "gitWorkspacePro.restoreAll",
-        "title": "Restore All",
+        "title": "%command.restoreAll%",
         "icon": "$(discard)"
       },
       {
         "command": "gitWorkspacePro.commit",
-        "title": "Commit",
+        "title": "%command.commit%",
         "icon": "$(git-commit)"
       },
       {
         "command": "gitWorkspacePro.fetch",
-        "title": "Fetch",
+        "title": "%command.fetch%",
         "icon": "$(cloud-download)"
       },
       {
         "command": "gitWorkspacePro.pull",
-        "title": "Pull",
+        "title": "%command.pull%",
         "icon": "$(cloud-download)"
       },
       {
         "command": "gitWorkspacePro.pullBranch",
-        "title": "Pull From Branch",
+        "title": "%command.pullBranch%",
         "icon": "$(cloud-download)"
       },
       {
         "command": "gitWorkspacePro.push",
-        "title": "Push",
+        "title": "%command.push%",
         "icon": "$(cloud-upload)"
       },
       {
         "command": "gitWorkspacePro.checkoutBranch",
-        "title": "Checkout Branch",
+        "title": "%command.checkoutBranch%",
         "icon": "$(git-branch)"
       },
       {
         "command": "gitWorkspacePro.createBranch",
-        "title": "Create Branch",
+        "title": "%command.createBranch%",
         "icon": "$(git-branch-create)"
       },
       {
         "command": "gitWorkspacePro.deleteBranch",
-        "title": "Delete Branch",
+        "title": "%command.deleteBranch%",
         "icon": "$(trash)"
       },
       {
         "command": "gitWorkspacePro.mergeBranch",
-        "title": "Merge Branch",
+        "title": "%command.mergeBranch%",
         "icon": "$(git-merge)"
       },
       {
         "command": "gitWorkspacePro.rebaseBranch",
-        "title": "Rebase Onto Branch",
+        "title": "%command.rebaseBranch%",
         "icon": "$(repo-force-push)"
       },
       {
         "command": "gitWorkspacePro.stashPush",
-        "title": "Stash Push",
+        "title": "%command.stashPush%",
         "icon": "$(archive)"
       },
       {
         "command": "gitWorkspacePro.stashPop",
-        "title": "Stash Pop",
+        "title": "%command.stashPop%",
         "icon": "$(folder-opened)"
       },
       {
+        "command": "gitWorkspacePro.continueOperation",
+        "title": "%command.continueOperation%",
+        "icon": "$(debug-continue)"
+      },
+      {
+        "command": "gitWorkspacePro.abortOperation",
+        "title": "%command.abortOperation%",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "gitWorkspacePro.skipOperation",
+        "title": "%command.skipOperation%",
+        "icon": "$(debug-step-over)"
+      },
+      {
         "command": "gitWorkspacePro.showRepositoryActions",
-        "title": "Repository Actions",
+        "title": "%command.showRepositoryActions%",
         "icon": "$(ellipsis)"
       },
       {
         "command": "gitWorkspacePro.showHistory",
-        "title": "Show History",
+        "title": "%command.showHistory%",
         "icon": "$(history)"
+      },
+      {
+        "command": "gitWorkspacePro.changeLanguage",
+        "title": "%command.changeLanguage%",
+        "icon": "$(globe)"
       }
     ],
+    "configuration": {
+      "title": "Git Workspace Pro",
+      "properties": {
+        "gitWorkspacePro.language": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "vi",
+            "en",
+            "zh-cn"
+          ],
+          "enumDescriptions": [
+            "%config.language.auto%",
+            "%config.language.vi%",
+            "%config.language.en%",
+            "%config.language.zh-cn%"
+          ],
+          "default": "auto",
+          "markdownDescription": "%config.language.description%"
+        }
+      }
+    },
     "menus": {
       "view/item/context": [
         {
@@ -188,7 +236,7 @@
         },
         {
           "command": "gitWorkspacePro.stageFile",
-          "when": "view == gitWorkspacePro.repositories && (viewItem == changedFile.unstaged || viewItem == changedFile.untracked || viewItem == changedFile.conflicted)",
+          "when": "view == gitWorkspacePro.repositories && (viewItem == changedFile.unstaged || viewItem == changedFile.untracked)",
           "group": "inline@3"
         },
         {
@@ -226,6 +274,37 @@
           "when": "view == gitWorkspacePro.repositories && viewItem == repository",
           "group": "inline@7"
         }
+      ],
+      "view/title": [
+        {
+          "command": "gitWorkspacePro.refreshRepositories",
+          "when": "view == gitWorkspacePro.repositories",
+          "group": "navigation@1"
+        }
+      ],
+      "commandPalette": [
+        { "command": "gitWorkspacePro.openChangedFile", "when": "false" },
+        { "command": "gitWorkspacePro.stageFile", "when": "false" },
+        { "command": "gitWorkspacePro.unstageFile", "when": "false" },
+        { "command": "gitWorkspacePro.openDiff", "when": "false" },
+        { "command": "gitWorkspacePro.resolveConflict", "when": "false" },
+        { "command": "gitWorkspacePro.discardFile", "when": "false" },
+        { "command": "gitWorkspacePro.stageAll", "when": "false" },
+        { "command": "gitWorkspacePro.unstageAll", "when": "false" },
+        { "command": "gitWorkspacePro.restoreAll", "when": "false" },
+        { "command": "gitWorkspacePro.commit", "when": "false" },
+        { "command": "gitWorkspacePro.fetch", "when": "false" },
+        { "command": "gitWorkspacePro.pull", "when": "false" },
+        { "command": "gitWorkspacePro.pullBranch", "when": "false" },
+        { "command": "gitWorkspacePro.push", "when": "false" },
+        { "command": "gitWorkspacePro.checkoutBranch", "when": "false" },
+        { "command": "gitWorkspacePro.createBranch", "when": "false" },
+        { "command": "gitWorkspacePro.deleteBranch", "when": "false" },
+        { "command": "gitWorkspacePro.mergeBranch", "when": "false" },
+        { "command": "gitWorkspacePro.rebaseBranch", "when": "false" },
+        { "command": "gitWorkspacePro.stashPush", "when": "false" },
+        { "command": "gitWorkspacePro.stashPop", "when": "false" },
+        { "command": "gitWorkspacePro.showHistory", "when": "false" }
       ]
     }
   },
@@ -235,7 +314,12 @@
     "lint": "eslint src --ext ts",
     "pretest:unit": "tsc -p ./tsconfig.test.json",
     "test:unit": "mocha",
-    "test": "npm run compile && npm run lint && npm run test:unit"
+    "test": "npm run compile && npm run lint && npm run test:unit",
+    "qa:smoke": "npm test",
+    "qa:ui": "npm run pretest:unit && mocha --grep \"\\\\[UI/UX\\\\]\" && node scripts/qa-render-ui.js",
+    "qa:performance": "npm run compile && node scripts/qa-performance.js",
+    "qa:all": "npm run qa:smoke && npm run qa:ui && npm run qa:performance",
+    "qa:create-conflict": "node scripts/create-conflict-fixture.js"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",

@@ -4,13 +4,29 @@ Git Workspace Pro là tiện ích mở rộng VS Code để quản lý nhiều k
 
 ## Tính năng
 
-- **Cây kho lưu trữ**: Tự động quét và hiển thị tất cả các kho Git trong không gian làm việc
+- **Cây kho lưu trữ tập trung**: Tự động quét và chỉ hiển thị các kho cần chú ý; kho sạch được ẩn, nhưng kho đang đồng bộ hoặc có operation vẫn được giữ
 - **Quản lý tệp**: Stage, unstage, discard, mở tệp, xem diff
 - **Thao tác Git**: Fetch, Pull, Pull từ nhánh khác, Push (tự động set upstream), Commit, Stage All, Unstage All
 - **Quản lý nhánh**: Checkout, Create, Merge, Rebase từ nhánh khác
+- **Pull an toàn**: Chọn Fast-forward Only, Rebase hoặc Merge thay vì phụ thuộc cấu hình Git của máy
+- **Operation control**: Continue, Skip và Abort cho merge/rebase/cherry-pick/revert đang thực hiện
+- **Conflict editor 3-pane**: Current / Result / Incoming theo phong cách IntelliJ IDEA, có Base và xử lý từng conflict hunk
+- **Conflict nâng cao**: Hỗ trợ diff3, modify/delete, file không có marker và binary conflict
 - **Stash**: Push (kèm tùy chọn message), Pop
 - **Menu thao tác**: Nhấp chuột phải vào kho lưu trữ để truy cập tất cả thao tác Git
 - **Biểu tượng tùy chỉnh**: Logo riêng cho activity bar và marketplace
+- **Đa ngôn ngữ**: Tự động theo VS Code hoặc chọn riêng Tiếng Việt, English, 中文（简体） cho cây repo, menu Git, thông báo, History và Conflict Resolver
+
+## Đổi ngôn ngữ
+
+Mở Command Palette và chạy `Git Workspace Pro: Đổi ngôn ngữ hiển thị`, sau đó chọn:
+
+- Tự động theo ngôn ngữ VS Code
+- Tiếng Việt
+- English
+- 中文（简体）
+
+Bạn cũng có thể đổi tại Settings bằng cấu hình `gitWorkspacePro.language`.
 
 ## Yêu cầu
 
@@ -22,7 +38,7 @@ Git Workspace Pro là tiện ích mở rộng VS Code để quản lý nhiều k
 
 ### Cách 1: Cài từ file VSIX
 
-1. Tải file `git-workspace-pro-0.0.1.vsix` từ [Releases](https://github.com/jinhyk21/git_extentions/releases)
+1. Tải file `git-workspace-pro-0.3.0.vsix` từ [Releases](https://github.com/jinhyk21/git_extentions/releases)
 2. Mở VS Code
 3. Nhấn `Ctrl+Shift+P` (Windows/Linux) hoặc `Cmd+Shift+P` (macOS) để mở Command Palette
 4. Gõ `Extensions: Install from VSIX...` và chọn
@@ -32,7 +48,7 @@ Git Workspace Pro là tiện ích mở rộng VS Code để quản lý nhiều k
 Hoặc cài bằng dòng lệnh:
 
 ```bash
-code --install-extension git-workspace-pro-0.0.1.vsix
+code --install-extension git-workspace-pro-0.3.0.vsix
 ```
 
 ### Cách 2: Build từ mã nguồn
@@ -66,7 +82,7 @@ vsce package --allow-missing-repository
 5. Cài file VSIX:
 
 ```bash
-code --install-extension git-workspace-pro-0.0.1.vsix
+code --install-extension git-workspace-pro-0.3.0.vsix
 ```
 
 ## Cách sử dụng
@@ -91,7 +107,7 @@ Mở rộng một kho để xem các tệp đã thay đổi. Mỗi tệp có cá
 |-----|-----------|
 | Mở tệp | Mở tệp để chỉnh sửa |
 | Diff | So sánh với HEAD |
-| Stage (+) | Thêm tệp vào index (unstaged/untracked/conflicted) |
+| Stage (+) | Thêm tệp unstaged/untracked vào index; file conflicted bắt buộc đi qua conflict editor |
 | Unstage (-) | Bỏ tệp khỏi index (staged) |
 | Discard | Hủy thay đổi (unstaged/untracked) |
 
@@ -112,12 +128,26 @@ Mở rộng một kho để xem các tệp đã thay đổi. Mỗi tệp có cá
 | **Create Branch** | Tạo và chuyển sang nhánh mới |
 | **Merge Branch** | Merge nhánh đã chọn vào nhánh hiện tại |
 | **Rebase Onto Branch** | Rebase nhánh hiện tại lên nhánh đã chọn |
+| **Continue Operation** | Tiếp tục merge/rebase/cherry-pick/revert sau khi resolve |
+| **Skip Operation Step** | Bỏ qua commit hiện tại của rebase/cherry-pick/revert |
+| **Abort Operation** | Hủy operation và quay lại trạng thái trước đó |
 | **Stash Push** | Lưu thay đổi vào stash (kèm message tùy chọn) |
 | **Stash Pop** | Áp dụng stash gần nhất và xóa nó |
 
 ### 5. Làm mới
 
 Nhấp chuột phải vào kho và chọn **Refresh** hoặc dùng nút refresh trên thanh công cụ để quét lại.
+
+### 6. Resolve conflict
+
+Khi pull, merge hoặc rebase dừng vì conflict:
+
+1. Chọn **Resolve First Conflict** hoặc mở nhóm **Conflicted** trong repository.
+2. Conflict editor hiển thị ba cột **Current**, **Result** và **Incoming**; phiên bản **Base** có thể mở ở phía dưới.
+3. Chọn **Accept Current**, **Accept Incoming**, **Accept Both** hoặc sửa trực tiếp cột Result.
+4. Chọn **Apply & Stage**. Extension tự mở conflict tiếp theo nếu vẫn còn.
+5. Khi file cuối cùng được resolve, chọn **Continue** để chạy `merge --continue` hoặc `rebase --continue`.
+6. Có thể chọn **Abort** từ dòng operation trong repository nếu muốn quay lại trạng thái ban đầu.
 
 ## Phát triển
 

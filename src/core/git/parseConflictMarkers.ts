@@ -3,12 +3,15 @@ export type ConflictSegment =
   | {
       readonly kind: "conflict";
       readonly oursLabel: string;
+      readonly baseLabel?: string;
       readonly theirsLabel: string;
       readonly ours: string;
+      readonly base?: string;
       readonly theirs: string;
     };
 
 const CONFLICT_START = /^<{7}(?: (.*))?$/;
+const CONFLICT_BASE = /^\|{7}(?: (.*))?$/;
 const CONFLICT_MIDDLE = /^={7}$/;
 const CONFLICT_END = /^>{7}(?: (.*))?$/;
 
@@ -37,11 +40,27 @@ export function parseConflictMarkers(content: string): readonly ConflictSegment[
     const startLineIndex = index;
     const oursLabel = startMatch[1] ?? "HEAD";
     const oursLines: string[] = [];
+    const baseLines: string[] = [];
+    let baseLabel: string | undefined;
     index += 1;
 
-    while (index < lines.length && !CONFLICT_MIDDLE.test(lines[index] ?? "")) {
+    while (
+      index < lines.length &&
+      !CONFLICT_BASE.test(lines[index] ?? "") &&
+      !CONFLICT_MIDDLE.test(lines[index] ?? "")
+    ) {
       oursLines.push(lines[index] ?? "");
       index += 1;
+    }
+
+    const baseMatch = CONFLICT_BASE.exec(lines[index] ?? "");
+    if (baseMatch) {
+      baseLabel = baseMatch[1] ?? "base";
+      index += 1;
+      while (index < lines.length && !CONFLICT_MIDDLE.test(lines[index] ?? "")) {
+        baseLines.push(lines[index] ?? "");
+        index += 1;
+      }
     }
 
     if (index >= lines.length) {
@@ -79,8 +98,10 @@ export function parseConflictMarkers(content: string): readonly ConflictSegment[
     segments.push({
       kind: "conflict",
       oursLabel,
+      ...(baseLabel ? { baseLabel } : {}),
       theirsLabel,
       ours: oursLines.join("\n"),
+      ...(baseLabel ? { base: baseLines.join("\n") } : {}),
       theirs: theirsLines.join("\n")
     });
   }

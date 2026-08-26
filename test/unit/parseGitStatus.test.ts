@@ -87,4 +87,28 @@ describe("parseGitStatus", () => {
 
     assert.strictEqual(result.files.length, 1);
   });
+
+  it("parses NUL-delimited paths without Git quoting", () => {
+    const result = parseGitStatus("main", "## main\0?? a b.txt\0?? arrow -> name.txt\0");
+
+    assert.deepStrictEqual(
+      result.files.map((file) => file.path),
+      ["a b.txt", "arrow -> name.txt"]
+    );
+    assert.ok(result.files.every((file) => file.originalPath === undefined));
+  });
+
+  it("parses a NUL-delimited rename where Git emits destination before source", () => {
+    const result = parseGitStatus("main", "## main\0R  new name.txt\0old name.txt\0");
+
+    assert.strictEqual(result.files[0]?.path, "new name.txt");
+    assert.strictEqual(result.files[0]?.originalPath, "old name.txt");
+  });
+
+  it("does not mistake an untracked filename containing an arrow for a rename", () => {
+    const result = parseGitStatus("main", "## main\n?? arrow -> name.txt");
+
+    assert.strictEqual(result.files[0]?.path, "arrow -> name.txt");
+    assert.strictEqual(result.files[0]?.originalPath, undefined);
+  });
 });

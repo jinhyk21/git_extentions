@@ -4,4 +4,6 @@ out-test/
 *.vsix
 .vscode-test/
 coverage/
+qa-artifacts/
+manual-conflict-test/
 npm-debug.log*

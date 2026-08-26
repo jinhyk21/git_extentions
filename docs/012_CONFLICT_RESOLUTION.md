@@ -1,8 +1,8 @@
 # Conflict Resolution
 
-## MVP Strategy
+## Strategy
 
-Use VS Code's native merge editor for file-level resolution and provide a Git Workspace Pro dashboard for operation control.
+Git Workspace Pro provides a JetBrains-style three-pane editor and keeps VS Code's native Merge Editor available as a fallback.
 
 ## Conflict Dashboard
 
@@ -40,6 +40,15 @@ Continue merge/rebase/cherry-pick
 Refresh repository
 ```
 
-## Later Custom Editor
+## Custom Editor
 
-A future version can add a custom 3-way editor with current, base, and incoming panes.
+The editor loads Git index stages directly:
+
+- Stage 1: Base
+- Stage 2: Current
+- Stage 3: Incoming
+- Working tree: editable Result
+
+It supports per-hunk Current, Incoming, Both, and Base choices; manual Result editing; diff3 markers; modify/delete conflicts; missing-marker conflicts; and binary whole-side selection.
+
+When the last conflicted file is resolved, the extension offers to continue the detected merge, rebase, cherry-pick, or revert operation.

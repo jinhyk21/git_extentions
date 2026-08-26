@@ -1,5 +1,13 @@
+import { access, readFile } from "node:fs/promises";
+import path from "node:path";
 import type { RepositoryStatusSummary } from "../../shared/types/repository";
+import type {
+  GitOperationState,
+  GitOperationType,
+  PullStrategy
+} from "../../shared/types/repository";
 import type { CommitLogEntry } from "../../shared/types/history";
+import { ErrorCodes } from "../../shared/constants/errorCodes";
 import { GitWorkspaceError } from "../errors/GitWorkspaceError";
 import { classifyGitError } from "./classifyGitError";
 import { GIT_LOG_PRETTY, parseGitLog } from "./parseGitLog";
@@ -25,19 +33,22 @@ export class GitAdapter {
 
   public async getStatus(path: string): Promise<RepositoryStatusSummary> {
     const branchResult = await this.exec(["branch", "--show-current"], path, 5_000);
-    const statusResult = await this.exec(["status", "--porcelain=v1", "--branch"], path, 10_000);
+    const statusResult = await this.exec(["status", "--porcelain=v1", "-z", "--branch"], path, 10_000);
 
     if (statusResult.exitCode !== 0) {
       throw this.toGitError(statusResult.stderr, "Repository status failed");
     }
 
     const { hasUpstream, ...summary } = parseGitStatus(branchResult.stdout.trim() || "DETACHED", statusResult.stdout);
+    const operation = await this.getOperationState(path);
     if (hasUpstream) {
-      return summary;
+      return operation ? { ...summary, operation } : summary;
     }
 
     const unpushedCommits = await this.countUnpushedCommits(path);
-    return { ...summary, ahead: unpushedCommits };
+    return operation
+      ? { ...summary, ahead: unpushedCommits, operation }
+      : { ...summary, ahead: unpushedCommits };
   }
 
   private async countUnpushedCommits(path: string): Promise<number> {
@@ -58,7 +69,11 @@ export class GitAdapter {
   }
 
   public async unstageFile(repositoryPath: string, filePath: string): Promise<void> {
-    const result = await this.exec(["restore", "--staged", "--", filePath], repositoryPath, 10_000);
+    const hasHead = await this.hasHead(repositoryPath);
+    const args = hasHead
+      ? ["restore", "--staged", "--", filePath]
+      : ["rm", "--cached", "--ignore-unmatch", "--", filePath];
+    const result = await this.exec(args, repositoryPath, 10_000);
     if (result.exitCode !== 0) {
       throw this.toGitError(result.stderr, "Unstage file failed");
     }
@@ -69,7 +84,11 @@ export class GitAdapter {
   }
 
   public async unstageAll(repositoryPath: string): Promise<void> {
-    await this.runOrThrow(["restore", "--staged", "."], repositoryPath, "Unstage all failed");
+    const hasHead = await this.hasHead(repositoryPath);
+    const args = hasHead
+      ? ["restore", "--staged", "."]
+      : ["rm", "-r", "--cached", "--ignore-unmatch", "."];
+    await this.runOrThrow(args, repositoryPath, "Unstage all failed");
   }
 
   public async discardFile(repositoryPath: string, filePath: string): Promise<void> {
@@ -84,12 +103,22 @@ export class GitAdapter {
     await this.runOrThrow(["fetch", "--all", "--prune"], repositoryPath, "Fetch failed", 60_000);
   }
 
-  public async pull(repositoryPath: string): Promise<void> {
-    await this.runOrThrow(["pull"], repositoryPath, "Pull failed", 60_000);
+  public async pull(repositoryPath: string, strategy: PullStrategy = "ff-only"): Promise<void> {
+    await this.runOrThrow(["pull", this.pullStrategyArgument(strategy)], repositoryPath, "Pull failed", 60_000);
   }
 
-  public async pullBranch(repositoryPath: string, branch: string): Promise<void> {
-    await this.runOrThrow(["pull", "origin", branch], repositoryPath, "Pull branch failed", 60_000);
+  public async pullBranch(
+    repositoryPath: string,
+    branch: string,
+    strategy: PullStrategy = "ff-only",
+    remote = "origin"
+  ): Promise<void> {
+    await this.runOrThrow(
+      ["pull", this.pullStrategyArgument(strategy), remote, branch],
+      repositoryPath,
+      "Pull branch failed",
+      60_000
+    );
   }
 
   public async push(repositoryPath: string): Promise<string> {
@@ -132,6 +161,31 @@ export class GitAdapter {
     await this.runOrThrow(["rebase", branch], repositoryPath, "Rebase branch failed", 60_000);
   }
 
+  public async continueOperation(repositoryPath: string, operation: GitOperationType): Promise<void> {
+    const args = operation === "cherry-pick"
+      ? ["cherry-pick", "--continue"]
+      : [operation, "--continue"];
+    await this.runOrThrow(args, repositoryPath, `Continue ${operation} failed`, 60_000);
+  }
+
+  public async abortOperation(repositoryPath: string, operation: GitOperationType): Promise<void> {
+    const args = operation === "cherry-pick"
+      ? ["cherry-pick", "--abort"]
+      : [operation, "--abort"];
+    await this.runOrThrow(args, repositoryPath, `Abort ${operation} failed`, 60_000);
+  }
+
+  public async skipOperation(repositoryPath: string, operation: GitOperationType): Promise<void> {
+    if (operation === "merge") {
+      throw new GitWorkspaceError(ErrorCodes.UnknownGitError, "Merge operations cannot skip a commit.");
+    }
+
+    const args = operation === "cherry-pick"
+      ? ["cherry-pick", "--skip"]
+      : [operation, "--skip"];
+    await this.runOrThrow(args, repositoryPath, `Skip ${operation} failed`, 60_000);
+  }
+
   public async stashPush(repositoryPath: string, message?: string): Promise<void> {
     const args = message && message.trim().length > 0
       ? ["stash", "push", "-u", "-m", message]
@@ -157,8 +211,46 @@ export class GitAdapter {
     return result.exitCode === 0 ? result.stdout : "";
   }
 
+  public async hasConflictStage(repositoryPath: string, filePath: string, stage: 1 | 2 | 3): Promise<boolean> {
+    const result = await this.exec(["ls-files", "--unmerged", "-z", "--", filePath], repositoryPath, 10_000);
+    if (result.exitCode !== 0) {
+      return false;
+    }
+
+    return result.stdout
+      .split("\0")
+      .filter(Boolean)
+      .some((record) => {
+        const metadata = record.slice(0, record.indexOf("\t"));
+        return metadata.endsWith(` ${stage}`);
+      });
+  }
+
   public async markResolved(repositoryPath: string, filePath: string): Promise<void> {
     await this.runOrThrow(["add", "--", filePath], repositoryPath, "Mark resolved failed");
+  }
+
+  public async resolveConflictWithSide(
+    repositoryPath: string,
+    filePath: string,
+    side: "current" | "incoming"
+  ): Promise<void> {
+    const stage = side === "current" ? 2 : 3;
+    if (await this.hasConflictStage(repositoryPath, filePath, stage)) {
+      await this.runOrThrow(
+        ["checkout", side === "current" ? "--ours" : "--theirs", "--", filePath],
+        repositoryPath,
+        `Keep ${side} version failed`
+      );
+      await this.markResolved(repositoryPath, filePath);
+      return;
+    }
+
+    await this.runOrThrow(
+      ["rm", "--ignore-unmatch", "--", filePath],
+      repositoryPath,
+      `Resolve ${side} deletion failed`
+    );
   }
 
   public async getLog(repositoryPath: string, maxCount = 300): Promise<readonly CommitLogEntry[]> {
@@ -181,7 +273,7 @@ export class GitAdapter {
 
   public async getCommitDiffFiles(repositoryPath: string, commitHash: string): Promise<readonly string[]> {
     const result = await this.exec(
-      ["diff-tree", "--no-commit-id", "--name-only", "-r", commitHash],
+      ["diff-tree", "--no-commit-id", "--name-only", "-z", "-r", commitHash],
       repositoryPath,
       10_000
     );
@@ -189,7 +281,44 @@ export class GitAdapter {
       throw this.toGitError(result.stderr, "Read commit files failed");
     }
 
-    return result.stdout.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+    return result.stdout.split("\0").filter(Boolean);
+  }
+
+  public async getOperationState(repositoryPath: string): Promise<GitOperationState | undefined> {
+    const gitDirectoryResult = await this.exec(["rev-parse", "--absolute-git-dir"], repositoryPath, 5_000);
+    if (gitDirectoryResult.exitCode !== 0) {
+      return undefined;
+    }
+
+    const gitDirectory = gitDirectoryResult.stdout.trim();
+    const rebaseMergeDirectory = path.join(gitDirectory, "rebase-merge");
+    const rebaseApplyDirectory = path.join(gitDirectory, "rebase-apply");
+
+    if (await this.pathExists(rebaseMergeDirectory)) {
+      return this.readRebaseState(rebaseMergeDirectory);
+    }
+
+    if (await this.pathExists(rebaseApplyDirectory)) {
+      return this.readRebaseState(rebaseApplyDirectory);
+    }
+
+    const operationFiles: readonly [string, GitOperationType][] = [
+      ["MERGE_HEAD", "merge"],
+      ["CHERRY_PICK_HEAD", "cherry-pick"],
+      ["REVERT_HEAD", "revert"]
+    ];
+
+    for (const [fileName, type] of operationFiles) {
+      const operationPath = path.join(gitDirectory, fileName);
+      if (await this.pathExists(operationPath)) {
+        return {
+          type,
+          target: await this.readTrimmedFile(operationPath)
+        };
+      }
+    }
+
+    return undefined;
   }
 
   private async runOrThrow(
@@ -222,5 +351,60 @@ export class GitAdapter {
   private toGitError(stderr: string, fallbackMessage: string): GitWorkspaceError {
     const message = stderr.trim() || fallbackMessage;
     return new GitWorkspaceError(classifyGitError(message), message);
+  }
+
+  private async hasHead(repositoryPath: string): Promise<boolean> {
+    const result = await this.exec(["rev-parse", "--verify", "HEAD"], repositoryPath, 5_000);
+    return result.exitCode === 0;
+  }
+
+  private pullStrategyArgument(strategy: PullStrategy): string {
+    switch (strategy) {
+      case "ff-only":
+        return "--ff-only";
+      case "rebase":
+        return "--rebase";
+      case "merge":
+        return "--no-rebase";
+    }
+  }
+
+  private async pathExists(targetPath: string): Promise<boolean> {
+    try {
+      await access(targetPath);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private async readTrimmedFile(targetPath: string): Promise<string | undefined> {
+    try {
+      const content = (await readFile(targetPath, "utf8")).trim();
+      return content.length > 0 ? content : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  private async readRebaseState(rebaseDirectory: string): Promise<GitOperationState> {
+    const [target, msgnum, end, next, last] = await Promise.all([
+      this.readTrimmedFile(path.join(rebaseDirectory, "onto")),
+      this.readTrimmedFile(path.join(rebaseDirectory, "msgnum")),
+      this.readTrimmedFile(path.join(rebaseDirectory, "end")),
+      this.readTrimmedFile(path.join(rebaseDirectory, "next")),
+      this.readTrimmedFile(path.join(rebaseDirectory, "last"))
+    ]);
+    const currentStepValue = msgnum ?? next;
+    const totalStepsValue = end ?? last;
+    const currentStep = currentStepValue ? Number.parseInt(currentStepValue, 10) : undefined;
+    const totalSteps = totalStepsValue ? Number.parseInt(totalStepsValue, 10) : undefined;
+
+    return {
+      type: "rebase",
+      target,
+      ...(Number.isFinite(currentStep) ? { currentStep } : {}),
+      ...(Number.isFinite(totalSteps) ? { totalSteps } : {})
+    };
   }
 }

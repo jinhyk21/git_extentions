@@ -12,14 +12,20 @@ export class GitProcessRunner {
       const child = spawn("git", [...args], {
         cwd,
         shell: false,
-        windowsHide: true
+        windowsHide: true,
+        env: {
+          ...process.env,
+          GIT_EDITOR: "true",
+          GIT_SEQUENCE_EDITOR: "true",
+          GIT_MERGE_AUTOEDIT: "no"
+        }
       });
 
       let stdout = "";
       let stderr = "";
 
       const timer = setTimeout(() => {
-        child.kill();
+        child.kill("SIGTERM");
         reject(new Error(`timed out after ${timeoutMs}ms`));
       }, timeoutMs);
 

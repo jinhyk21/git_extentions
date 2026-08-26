@@ -200,4 +200,163 @@ describe("GitAdapter (integration)", () => {
 
     assert.deepStrictEqual(files, ["changed.txt"]);
   });
+
+  it("unstages a file in a repository with no commits", async () => {
+    const emptyRepoDir = mkdtempSync(path.join(tmpdir(), "gwp-unborn-"));
+    git(emptyRepoDir, ["init", "--quiet", "--initial-branch=main"]);
+    writeFile(emptyRepoDir, "first.txt", "content\n");
+    git(emptyRepoDir, ["add", "first.txt"]);
+
+    try {
+      await adapter.unstageFile(emptyRepoDir, "first.txt");
+      const status = await adapter.getStatus(emptyRepoDir);
+      assert.strictEqual(status.counts.staged, 0);
+      assert.strictEqual(status.counts.untracked, 1);
+    } finally {
+      rmSync(emptyRepoDir, { recursive: true, force: true });
+    }
+  });
+
+  it("detects, continues, and completes a merge conflict", async () => {
+    git(repoDir, ["checkout", "-q", "-b", "feature"]);
+    writeFile(repoDir, "README.md", "feature\n");
+    git(repoDir, ["commit", "-qam", "feature"]);
+    git(repoDir, ["checkout", "-q", "main"]);
+    writeFile(repoDir, "README.md", "main\n");
+    git(repoDir, ["commit", "-qam", "main"]);
+
+    await assert.rejects(() => adapter.mergeBranch(repoDir, "feature"));
+    let status = await adapter.getStatus(repoDir);
+    assert.strictEqual(status.operation?.type, "merge");
+    assert.strictEqual(status.counts.conflicted, 1);
+
+    writeFile(repoDir, "README.md", "resolved\n");
+    await adapter.markResolved(repoDir, "README.md");
+    await adapter.continueOperation(repoDir, "merge");
+
+    status = await adapter.getStatus(repoDir);
+    assert.strictEqual(status.operation, undefined);
+    assert.strictEqual(status.counts.conflicted, 0);
+  });
+
+  it("detects and aborts a merge conflict", async () => {
+    git(repoDir, ["checkout", "-q", "-b", "feature"]);
+    writeFile(repoDir, "README.md", "feature\n");
+    git(repoDir, ["commit", "-qam", "feature"]);
+    git(repoDir, ["checkout", "-q", "main"]);
+    writeFile(repoDir, "README.md", "main\n");
+    git(repoDir, ["commit", "-qam", "main"]);
+
+    await assert.rejects(() => adapter.mergeBranch(repoDir, "feature"));
+    await adapter.abortOperation(repoDir, "merge");
+
+    const status = await adapter.getStatus(repoDir);
+    assert.strictEqual(status.operation, undefined);
+    assert.strictEqual(status.counts.conflicted, 0);
+    assert.strictEqual(execFileSync("git", ["show", "HEAD:README.md"], { cwd: repoDir }).toString(), "main\n");
+  });
+
+  it("detects, continues, and completes a rebase conflict", async () => {
+    git(repoDir, ["checkout", "-q", "-b", "feature"]);
+    writeFile(repoDir, "README.md", "feature\n");
+    git(repoDir, ["commit", "-qam", "feature"]);
+    git(repoDir, ["checkout", "-q", "main"]);
+    writeFile(repoDir, "README.md", "main\n");
+    git(repoDir, ["commit", "-qam", "main"]);
+    git(repoDir, ["checkout", "-q", "feature"]);
+
+    await assert.rejects(() => adapter.rebaseBranch(repoDir, "main"));
+    let status = await adapter.getStatus(repoDir);
+    assert.strictEqual(status.operation?.type, "rebase");
+    assert.strictEqual(status.counts.conflicted, 1);
+
+    writeFile(repoDir, "README.md", "resolved\n");
+    await adapter.markResolved(repoDir, "README.md");
+    await adapter.continueOperation(repoDir, "rebase");
+
+    status = await adapter.getStatus(repoDir);
+    assert.strictEqual(status.operation, undefined);
+    assert.strictEqual(status.counts.conflicted, 0);
+  });
+
+  it("detects and aborts a rebase conflict", async () => {
+    git(repoDir, ["checkout", "-q", "-b", "feature"]);
+    writeFile(repoDir, "README.md", "feature\n");
+    git(repoDir, ["commit", "-qam", "feature"]);
+    git(repoDir, ["checkout", "-q", "main"]);
+    writeFile(repoDir, "README.md", "main\n");
+    git(repoDir, ["commit", "-qam", "main"]);
+    git(repoDir, ["checkout", "-q", "feature"]);
+
+    await assert.rejects(() => adapter.rebaseBranch(repoDir, "main"));
+    await adapter.abortOperation(repoDir, "rebase");
+
+    const status = await adapter.getStatus(repoDir);
+    assert.strictEqual(status.operation, undefined);
+    assert.strictEqual(status.branch, "feature");
+    assert.strictEqual(execFileSync("git", ["show", "HEAD:README.md"], { cwd: repoDir }).toString(), "feature\n");
+  });
+
+  it("reports missing/current/incoming stages for a modify-delete conflict", async () => {
+    git(repoDir, ["checkout", "-q", "-b", "feature"]);
+    writeFile(repoDir, "README.md", "feature changed\n");
+    git(repoDir, ["commit", "-qam", "modify readme"]);
+    git(repoDir, ["checkout", "-q", "main"]);
+    git(repoDir, ["rm", "-q", "README.md"]);
+    git(repoDir, ["commit", "-qm", "delete readme"]);
+
+    await assert.rejects(() => adapter.mergeBranch(repoDir, "feature"));
+
+    assert.strictEqual(await adapter.hasConflictStage(repoDir, "README.md", 1), true);
+    assert.strictEqual(await adapter.hasConflictStage(repoDir, "README.md", 2), false);
+    assert.strictEqual(await adapter.hasConflictStage(repoDir, "README.md", 3), true);
+
+    await adapter.resolveConflictWithSide(repoDir, "README.md", "current");
+    await adapter.continueOperation(repoDir, "merge");
+
+    assert.throws(() => {
+      execFileSync("git", ["cat-file", "-e", "HEAD:README.md"], { cwd: repoDir, stdio: "ignore" });
+    });
+  });
+
+  it("skips the conflicting commit in an in-progress rebase", async () => {
+    git(repoDir, ["checkout", "-q", "-b", "feature"]);
+    writeFile(repoDir, "README.md", "feature\n");
+    git(repoDir, ["commit", "-qam", "feature conflict"]);
+    git(repoDir, ["checkout", "-q", "main"]);
+    writeFile(repoDir, "README.md", "main\n");
+    git(repoDir, ["commit", "-qam", "main conflict"]);
+    git(repoDir, ["checkout", "-q", "feature"]);
+
+    await assert.rejects(() => adapter.rebaseBranch(repoDir, "main"));
+    await adapter.skipOperation(repoDir, "rebase");
+
+    const status = await adapter.getStatus(repoDir);
+    assert.strictEqual(status.operation, undefined);
+    assert.strictEqual(execFileSync("git", ["show", "HEAD:README.md"], { cwd: repoDir }).toString(), "main\n");
+    assert.doesNotMatch(execFileSync("git", ["log", "--format=%s"], { cwd: repoDir }).toString(), /feature conflict/);
+  });
+
+  it("resolves a binary merge conflict by keeping the incoming side", async () => {
+    const binaryPath = path.join(repoDir, "asset.bin");
+    writeFileSync(binaryPath, Buffer.from([0, 1, 2, 3]));
+    git(repoDir, ["add", "asset.bin"]);
+    git(repoDir, ["commit", "-qm", "add binary"]);
+    git(repoDir, ["checkout", "-q", "-b", "feature"]);
+    writeFileSync(binaryPath, Buffer.from([0, 9, 9, 9]));
+    git(repoDir, ["commit", "-qam", "feature binary"]);
+    git(repoDir, ["checkout", "-q", "main"]);
+    writeFileSync(binaryPath, Buffer.from([0, 8, 8, 8]));
+    git(repoDir, ["commit", "-qam", "main binary"]);
+
+    await assert.rejects(() => adapter.mergeBranch(repoDir, "feature"));
+    assert.match(await adapter.readConflictStage(repoDir, "asset.bin", 3), /\0/);
+    await adapter.resolveConflictWithSide(repoDir, "asset.bin", "incoming");
+    await adapter.continueOperation(repoDir, "merge");
+
+    assert.deepStrictEqual(
+      execFileSync("git", ["show", "HEAD:asset.bin"], { cwd: repoDir }),
+      Buffer.from([0, 9, 9, 9])
+    );
+  });
 });
