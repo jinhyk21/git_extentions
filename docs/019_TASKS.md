@@ -75,8 +75,11 @@
 - Done: Add stash push/pop (stash pop requires confirmation).
 - Done: Custom conflict resolution webview (3-way view: current / incoming / editable result).
 - Done: Mark conflict resolved (writes resolved content, then stages the file).
-- Pending: Continue or abort an in-progress merge/rebase operation.
-- Pending: Repository-wide conflict dashboard listing all conflicted files across repos.
+- Done: Continue or abort an in-progress merge/rebase/cherry-pick/revert operation.
+- Done: Skip the current rebase/cherry-pick/revert step.
+- Done: Repository operation row with conflict count and operation actions.
+- Done: Navigate automatically to the next conflicted file.
+- Done: Resolve modify/delete and binary conflicts by choosing a complete side.
 
 ## Cross-cutting: Quality & CI
 

@@ -1,7 +1,16 @@
 import * as vscode from "vscode";
 import { RepositoryManager } from "../core/repository/RepositoryManager";
-import type { GitChangedFile, GitFileStatusKind, RepositoryNode } from "../shared/types/repository";
+import type {
+  GitChangedFile,
+  GitFileStatusKind,
+  GitOperationState,
+  RepositoryNode
+} from "../shared/types/repository";
 import { registerCommands } from "./commands/registerCommands";
+import { t } from "./localization";
+import { shouldShowRepository } from "./repositoryVisibility";
+import { ConflictResolutionPanel } from "./webview/ConflictResolutionPanel";
+import { HistoryPanel } from "./webview/HistoryPanel";
 
 export function activate(context: vscode.ExtensionContext): void {
   const repositoryManager = new RepositoryManager();
@@ -11,6 +20,15 @@ export function activate(context: vscode.ExtensionContext): void {
 
   context.subscriptions.push(vscode.window.registerTreeDataProvider("gitWorkspacePro.repositories", treeProvider));
   registerCommands(context, repositoryManager, () => treeProvider.refresh());
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration((event) => {
+      if (event.affectsConfiguration("gitWorkspacePro.language")) {
+        treeProvider.refresh();
+        ConflictResolutionPanel.refreshOpenPanels();
+        HistoryPanel.refreshOpenPanels();
+      }
+    })
+  );
 
   const rescanWorkspace = () => {
     const folders = vscode.workspace.workspaceFolders?.map((folder) => folder.uri.fsPath) ?? [];
@@ -100,11 +118,17 @@ function dumpRepositoryTreeForDebug(
   }
 }
 
-type TreeNode = RepositoryNode | ActionMenuNode | FileGroupNode | ChangedFileNode;
+type TreeNode = RepositoryNode | ActionMenuNode | OperationNode | FileGroupNode | ChangedFileNode;
 
 type ActionMenuNode = {
   readonly type: "actionMenu";
   readonly repository: RepositoryNode;
+};
+
+type OperationNode = {
+  readonly type: "operation";
+  readonly repository: RepositoryNode;
+  readonly operation: GitOperationState;
 };
 
 type FileGroupNode = {
@@ -132,15 +156,46 @@ class RepositoryTreeProvider implements vscode.TreeDataProvider<TreeNode> {
   }
 
   public getTreeItem(element: TreeNode): vscode.TreeItem {
+    if (this.isOperationNode(element)) {
+      const operationName = this.formatOperation(element.operation);
+      const item = new vscode.TreeItem(
+        t("{operation} in progress", { operation: operationName }),
+        vscode.TreeItemCollapsibleState.None
+      );
+      item.id = `operation:${element.repository.rootPath}:${element.operation.type}`;
+      item.description = element.repository.status?.counts.conflicted
+        ? t(
+            element.repository.status.counts.conflicted === 1 ? "{count} conflict" : "{count} conflicts",
+            { count: element.repository.status.counts.conflicted }
+          )
+        : t("Ready to continue");
+      item.tooltip = t("Click to continue, abort, skip, or inspect this Git operation.");
+      item.contextValue = `gitOperation.${element.operation.type}`;
+      item.iconPath = new vscode.ThemeIcon(
+        element.repository.status?.counts.conflicted ? "warning" : "debug-continue",
+        new vscode.ThemeColor(
+          element.repository.status?.counts.conflicted
+            ? "gitDecoration.conflictingResourceForeground"
+            : "gitDecoration.addedResourceForeground"
+        )
+      );
+      item.command = {
+        command: "gitWorkspacePro.showRepositoryActions",
+        title: t("Git Operation Actions"),
+        arguments: [element.repository]
+      };
+      return item;
+    }
+
     if (this.isActionMenuNode(element)) {
       const item = new vscode.TreeItem("...", vscode.TreeItemCollapsibleState.None);
       item.id = `actions:${element.repository.rootPath}`;
       item.contextValue = "actionMenu";
-      item.tooltip = "Repository actions";
+      item.tooltip = t("Repository actions");
       item.iconPath = new vscode.ThemeIcon("ellipsis");
       item.command = {
         command: "gitWorkspacePro.showRepositoryActions",
-        title: "Repository Actions",
+        title: t("Repository Actions"),
         arguments: [element]
       };
       return item;
@@ -232,7 +287,7 @@ class RepositoryTreeProvider implements vscode.TreeDataProvider<TreeNode> {
 
   public getChildren(element?: TreeNode): TreeNode[] {
     if (!element) {
-      return this.repositoryManager.getRepositories().filter((repository) => this.hasChanges(repository));
+      return this.repositoryManager.getRepositories().filter(shouldShowRepository);
     }
 
     if (this.isFileGroupNode(element)) {
@@ -248,6 +303,10 @@ class RepositoryTreeProvider implements vscode.TreeDataProvider<TreeNode> {
     }
 
     if (this.isActionMenuNode(element)) {
+      return [];
+    }
+
+    if (this.isOperationNode(element)) {
       return [];
     }
 
@@ -267,21 +326,28 @@ class RepositoryTreeProvider implements vscode.TreeDataProvider<TreeNode> {
   private getRepositoryDescription(repository: RepositoryNode): string {
     const status = repository.status;
     if (!status) {
-      return repository.statusError ? "Status unavailable" : "Loading…";
+      return repository.statusError ? t("Status unavailable") : t("Loading…");
     }
 
     const segments: string[] = [];
+    if (status.operation) {
+      segments.push(t("{operation} in progress", { operation: this.formatOperation(status.operation) }));
+    }
     if (status.counts.conflicted > 0) {
-      segments.push(`${status.counts.conflicted} conflict${status.counts.conflicted > 1 ? "s" : ""}`);
+      segments.push(
+        t(status.counts.conflicted === 1 ? "{count} conflict" : "{count} conflicts", {
+          count: status.counts.conflicted
+        })
+      );
     }
     if (status.counts.staged > 0) {
-      segments.push(`${status.counts.staged} staged`);
+      segments.push(t("{count} staged", { count: status.counts.staged }));
     }
     if (status.counts.unstaged > 0) {
-      segments.push(`${status.counts.unstaged} unstaged`);
+      segments.push(t("{count} unstaged", { count: status.counts.unstaged }));
     }
     if (status.counts.untracked > 0) {
-      segments.push(`${status.counts.untracked} untracked`);
+      segments.push(t("{count} untracked", { count: status.counts.untracked }));
     }
 
     const syncParts: string[] = [];
@@ -292,7 +358,7 @@ class RepositoryTreeProvider implements vscode.TreeDataProvider<TreeNode> {
       syncParts.push(`↓${status.behind}`);
     }
 
-    const workingTreeLabel = segments.length > 0 ? segments.join(", ") : "Clean";
+    const workingTreeLabel = segments.length > 0 ? segments.join(", ") : t("Clean");
     const branchLabel = `${status.branch}${syncParts.length > 0 ? ` ${syncParts.join(" ")}` : ""}`;
 
     return `${branchLabel} • ${workingTreeLabel}`;
@@ -308,11 +374,15 @@ class RepositoryTreeProvider implements vscode.TreeDataProvider<TreeNode> {
 
     const lines = [
       repository.rootPath,
-      `Branch: ${status.branch}`,
+      t("Branch: {branch}", { branch: status.branch }),
       status.ahead > 0 || status.behind > 0
-        ? `Sync: ${status.ahead} ahead, ${status.behind} behind`
-        : "Sync: up to date",
-      `Staged: ${status.counts.staged}  Unstaged: ${status.counts.unstaged}  Untracked: ${status.counts.untracked}`
+        ? t("Sync: {ahead} ahead, {behind} behind", { ahead: status.ahead, behind: status.behind })
+        : t("Sync: up to date"),
+      t("Staged: {staged}  Unstaged: {unstaged}  Untracked: {untracked}", {
+        staged: status.counts.staged,
+        unstaged: status.counts.unstaged,
+        untracked: status.counts.untracked
+      })
     ];
 
     if (status.counts.conflicted > 0) {
@@ -323,40 +393,25 @@ class RepositoryTreeProvider implements vscode.TreeDataProvider<TreeNode> {
   }
 
   private getRepositoryChildren(repository: RepositoryNode): TreeNode[] {
+    const operationNodes: OperationNode[] = repository.status?.operation
+      ? [{
+          type: "operation",
+          repository,
+          operation: repository.status.operation
+        }]
+      : [];
     const groups = this.getFileGroups(repository);
-    const children = repository.children.filter((child) => this.hasChanges(child));
-    return [...groups, ...children];
-  }
-
-  /**
-   * A repository is shown in the tree only when it has something to act on:
-   * working tree changes, unpushed/unpulled commits, or an unreadable status
-   * (surfaced as an error rather than hidden). A repository whose own status
-   * is clean is still shown if any nested child repository has changes, so
-   * the tree stays navigable down to them.
-   */
-  private hasChanges(repository: RepositoryNode): boolean {
-    const status = repository.status;
-    if (!status) {
-      // Either still loading or the status read failed — show it either way
-      // rather than silently hiding a repository whose real state is unknown.
-      return true;
-    }
-
-    if (status.files.length > 0 || status.ahead > 0 || status.behind > 0) {
-      return true;
-    }
-
-    return repository.children.some((child) => this.hasChanges(child));
+    const visibleChildren = repository.children.filter(shouldShowRepository);
+    return [...operationNodes, ...groups, ...visibleChildren];
   }
 
   private getFileGroups(repository: RepositoryNode): FileGroupNode[] {
     const files = repository.status?.files ?? [];
     const groups: Array<{ kind: GitFileStatusKind; label: string }> = [
-      { kind: "conflicted", label: "Conflicted" },
-      { kind: "staged", label: "Staged" },
-      { kind: "unstaged", label: "Unstaged" },
-      { kind: "untracked", label: "Untracked" }
+      { kind: "conflicted", label: t("Conflicted") },
+      { kind: "staged", label: t("Staged") },
+      { kind: "unstaged", label: t("Unstaged") },
+      { kind: "untracked", label: t("Untracked") }
     ];
 
     return groups
@@ -380,5 +435,30 @@ class RepositoryTreeProvider implements vscode.TreeDataProvider<TreeNode> {
 
   private isActionMenuNode(element: TreeNode): element is ActionMenuNode {
     return "type" in element && element.type === "actionMenu";
+  }
+
+  private isOperationNode(element: TreeNode): element is OperationNode {
+    return "type" in element && element.type === "operation";
+  }
+
+  private formatOperation(operation: GitOperationState): string {
+    const name = formatOperationName(operation.type);
+    if (operation.currentStep && operation.totalSteps) {
+      return `${name} ${operation.currentStep}/${operation.totalSteps}`;
+    }
+    return name;
+  }
+}
+
+function formatOperationName(operation: GitOperationState["type"]): string {
+  switch (operation) {
+    case "merge":
+      return t("Merge");
+    case "rebase":
+      return t("Rebase");
+    case "cherry-pick":
+      return t("Cherry Pick");
+    case "revert":
+      return t("Revert");
   }
 }

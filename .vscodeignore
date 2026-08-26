@@ -1,6 +1,9 @@
 node_modules/
 src/
 test/
+scripts/
+qa-artifacts/
+manual-conflict-test/
 out-test/
 .ai/
 docs/

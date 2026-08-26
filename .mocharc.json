@@ -1,4 +1,8 @@
 {
-  "spec": ["out-test/test/unit/**/*.test.js", "out-test/test/integration/**/*.test.js"],
-  "timeout": 10000
+  "spec": [
+    "out-test/test/unit/**/*.test.js",
+    "out-test/test/integration/**/*.test.js",
+    "out-test/test/system/**/*.test.js"
+  ],
+  "timeout": 20000
 }

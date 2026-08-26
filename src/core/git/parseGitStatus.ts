@@ -1,13 +1,16 @@
 import type { GitChangedFile, GitFileStatusKind, RepositoryStatusSummary } from "../../shared/types/repository";
 
 export function parseGitStatus(branch: string, output: string): RepositoryStatusSummary & { hasUpstream: boolean } {
-  const lines = output.split(/\r?\n/).filter(Boolean);
+  const records = output.includes("\0")
+    ? output.split("\0").filter((record) => record.length > 0)
+    : output.split(/\r?\n/).filter(Boolean);
   const files: GitChangedFile[] = [];
   let ahead = 0;
   let behind = 0;
   let hasUpstream = false;
 
-  for (const line of lines) {
+  for (let recordIndex = 0; recordIndex < records.length; recordIndex += 1) {
+    const line = records[recordIndex] ?? "";
     if (line.startsWith("## ")) {
       hasUpstream = line.includes("...");
       const aheadMatch = /ahead (\d+)/.exec(line);
@@ -31,12 +34,20 @@ export function parseGitStatus(branch: string, output: string): RepositoryStatus
       continue;
     }
 
+    const isRenameOrCopy = ["R", "C"].includes(indexStatus) || ["R", "C"].includes(workTreeStatus);
+    const originalPath = output.includes("\0") && isRenameOrCopy
+      ? records[recordIndex + 1]
+      : undefined;
+    if (originalPath !== undefined) {
+      recordIndex += 1;
+    }
+
     if (indexStatus !== " ") {
-      files.push(createChangedFile(filePath, "staged", indexStatus, workTreeStatus));
+      files.push(createChangedFile(filePath, "staged", indexStatus, workTreeStatus, originalPath));
     }
 
     if (workTreeStatus !== " ") {
-      files.push(createChangedFile(filePath, "unstaged", indexStatus, workTreeStatus));
+      files.push(createChangedFile(filePath, "unstaged", indexStatus, workTreeStatus, originalPath));
     }
   }
 
@@ -59,8 +70,29 @@ function createChangedFile(
   rawPath: string,
   kind: GitFileStatusKind,
   indexStatus: string,
-  workTreeStatus: string
+  workTreeStatus: string,
+  nulOriginalPath?: string
 ): GitChangedFile {
+  if (nulOriginalPath !== undefined) {
+    return {
+      originalPath: nulOriginalPath,
+      path: rawPath,
+      kind,
+      indexStatus,
+      workTreeStatus
+    };
+  }
+
+  const isRenameOrCopy = ["R", "C"].includes(indexStatus) || ["R", "C"].includes(workTreeStatus);
+  if (!isRenameOrCopy) {
+    return {
+      path: rawPath,
+      kind,
+      indexStatus,
+      workTreeStatus
+    };
+  }
+
   const renameSeparator = " -> ";
   const renameIndex = rawPath.indexOf(renameSeparator);
 

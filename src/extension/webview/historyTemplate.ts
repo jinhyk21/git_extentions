@@ -1,16 +1,25 @@
 import type { Webview } from "vscode";
+import { translate, type AppLanguage } from "../../shared/i18n";
 import type { CommitGraph } from "../../shared/types/history";
 
-export function getHistoryHtml(webview: Webview, repositoryName: string, graph: CommitGraph): string {
+export function getHistoryHtml(
+  webview: Webview,
+  repositoryName: string,
+  graph: CommitGraph,
+  language: AppLanguage = "en"
+): string {
   const nonce = createNonce();
-  const dataScript = JSON.stringify({ repositoryName, graph });
+  const translations = Object.fromEntries(
+    ["History", "Refresh", "No commits found."].map((message) => [message, translate(language, message)])
+  );
+  const dataScript = JSON.stringify({ repositoryName, graph, translations });
 
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="${language}">
 <head>
 <meta charset="UTF-8" />
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';" />
-<title>History</title>
+<title>${translate(language, "History")}</title>
 <style>
   :root {
     color-scheme: light dark;
@@ -127,7 +136,7 @@ export function getHistoryHtml(webview: Webview, repositoryName: string, graph: 
 <body>
 <header>
   <h1 id="title"></h1>
-  <button id="refreshButton">Refresh</button>
+  <button id="refreshButton">${translate(language, "Refresh")}</button>
 </header>
 <main>
   <div id="rows"></div>
@@ -152,7 +161,8 @@ function createNonce(): string {
 function getClientScript(): string {
   return `
   const vscodeApi = acquireVsCodeApi();
-  document.getElementById('title').textContent = historyData.repositoryName + ' — History';
+  const tr = (message) => historyData.translations[message] || message;
+  document.getElementById('title').textContent = historyData.repositoryName + ' — ' + tr('History');
 
   const rowsRoot = document.getElementById('rows');
   const ROW_HEIGHT = 28;
@@ -192,7 +202,7 @@ function getClientScript(): string {
     if (nodes.length === 0) {
       const empty = document.createElement('div');
       empty.className = 'empty-state';
-      empty.textContent = 'No commits found.';
+      empty.textContent = tr('No commits found.');
       rowsRoot.appendChild(empty);
       return;
     }

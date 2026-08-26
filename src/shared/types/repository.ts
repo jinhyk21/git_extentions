@@ -1,5 +1,16 @@
 export type GitFileStatusKind = "staged" | "unstaged" | "untracked" | "conflicted";
 
+export type GitOperationType = "merge" | "rebase" | "cherry-pick" | "revert";
+
+export type GitOperationState = {
+  readonly type: GitOperationType;
+  readonly target?: string;
+  readonly currentStep?: number;
+  readonly totalSteps?: number;
+};
+
+export type PullStrategy = "ff-only" | "rebase" | "merge";
+
 export type GitChangedFile = {
   readonly path: string;
   readonly originalPath?: string;
@@ -13,6 +24,7 @@ export type RepositoryStatusSummary = {
   readonly files: readonly GitChangedFile[];
   readonly ahead: number;
   readonly behind: number;
+  readonly operation?: GitOperationState;
   readonly counts: {
     readonly staged: number;
     readonly unstaged: number;

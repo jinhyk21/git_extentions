@@ -92,4 +92,26 @@ describe("parseConflictMarkers", () => {
   it("does not treat a lone marker line as a conflict without a full block", () => {
     assert.strictEqual(hasConflictMarkers("<<<<<<< not a real conflict"), false);
   });
+
+  it("parses diff3 base sections", () => {
+    const content = [
+      "<<<<<<< HEAD",
+      "current",
+      "||||||| parent",
+      "base",
+      "=======",
+      "incoming",
+      ">>>>>>> feature"
+    ].join("\n");
+
+    const conflict = parseConflictMarkers(content)[0];
+    if (conflict?.kind !== "conflict") {
+      throw new Error("expected conflict segment");
+    }
+
+    assert.strictEqual(conflict.ours, "current");
+    assert.strictEqual(conflict.base, "base");
+    assert.strictEqual(conflict.baseLabel, "parent");
+    assert.strictEqual(conflict.theirs, "incoming");
+  });
 });

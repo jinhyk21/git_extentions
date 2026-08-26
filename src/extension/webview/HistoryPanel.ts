@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import path from "node:path";
 import type { RepositoryManager } from "../../core/repository/RepositoryManager";
 import { buildCommitGraph } from "../../core/git/buildCommitGraph";
+import { getActiveLanguage, t } from "../localization";
 import { getHistoryHtml } from "./historyTemplate";
 
 type WebviewOutboundMessage =
@@ -32,6 +33,12 @@ export class HistoryPanel {
   private readonly panel: vscode.WebviewPanel;
   private disposed = false;
 
+  public static refreshOpenPanels(): void {
+    for (const panel of HistoryPanel.openPanels.values()) {
+      void panel.render();
+    }
+  }
+
   public static async open(repositoryManager: RepositoryManager, repositoryRootPath: string, repositoryName: string): Promise<void> {
     const existing = HistoryPanel.openPanels.get(repositoryRootPath);
     if (existing) {
@@ -52,7 +59,7 @@ export class HistoryPanel {
   ) {
     this.panel = vscode.window.createWebviewPanel(
       "gitWorkspacePro.history",
-      `History: ${repositoryName}`,
+      t("History: {repository}", { repository: repositoryName }),
       vscode.ViewColumn.Active,
       { enableScripts: true, retainContextWhenHidden: true }
     );
@@ -75,12 +82,18 @@ export class HistoryPanel {
     }
 
     try {
+      this.panel.title = t("History: {repository}", { repository: this.repositoryName });
       const commits = await this.repositoryManager.getLog(this.repositoryRootPath);
       const graph = buildCommitGraph(commits);
-      this.panel.webview.html = getHistoryHtml(this.panel.webview, this.repositoryName, graph);
+      this.panel.webview.html = getHistoryHtml(
+        this.panel.webview,
+        this.repositoryName,
+        graph,
+        getActiveLanguage()
+      );
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      vscode.window.showErrorMessage(`Failed to load history: ${message}`);
+      vscode.window.showErrorMessage(t("Failed to load history: {message}", { message }));
     }
   }
 
@@ -106,7 +119,9 @@ export class HistoryPanel {
     try {
       const files = await this.repositoryManager.getCommitDiffFiles(this.repositoryRootPath, hash);
       if (files.length === 0) {
-        vscode.window.showInformationMessage(`Commit ${hash.slice(0, 7)} has no file changes.`);
+        vscode.window.showInformationMessage(
+          t("Commit {hash} has no file changes.", { hash: hash.slice(0, 7) })
+        );
         return;
       }
 
@@ -115,7 +130,11 @@ export class HistoryPanel {
       const filesToOpen = files.slice(0, 20);
       if (files.length > filesToOpen.length) {
         vscode.window.showInformationMessage(
-          `Commit ${hash.slice(0, 7)} changed ${files.length} files — opening the first ${filesToOpen.length}.`
+          t("Commit {hash} changed {count} files — opening the first {limit}.", {
+            hash: hash.slice(0, 7),
+            count: files.length,
+            limit: filesToOpen.length
+          })
         );
       }
 
@@ -144,7 +163,7 @@ export class HistoryPanel {
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      vscode.window.showErrorMessage(`Failed to open commit diff: ${message}`);
+      vscode.window.showErrorMessage(t("Failed to open commit diff: {message}", { message }));
     }
   }
 }

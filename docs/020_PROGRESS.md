@@ -23,6 +23,6 @@
 
 ## Next
 
-- Add file diff action.
-- Add operation-state UI for long-running merge/rebase.
-- Add conflict dashboard for merge/rebase failures.
+- Add remote selection and grouped local/remote branch pickers.
+- Add VS Code Extension Host UI automation for the conflict editor.
+- Add optional changed-only filtering for very large multi-repository workspaces.

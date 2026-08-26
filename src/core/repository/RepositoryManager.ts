@@ -1,5 +1,10 @@
 import path from "node:path";
-import type { RepositoryNode } from "../../shared/types/repository";
+import type {
+  GitOperationState,
+  GitOperationType,
+  PullStrategy,
+  RepositoryNode
+} from "../../shared/types/repository";
 import type { CommitLogEntry } from "../../shared/types/history";
 import { GitAdapter } from "../git/GitAdapter";
 import { RepositoryScanner } from "./RepositoryScanner";
@@ -103,12 +108,12 @@ export class RepositoryManager {
     await this.gitAdapter.fetch(repositoryPath);
   }
 
-  public async pull(repositoryPath: string): Promise<void> {
-    await this.gitAdapter.pull(repositoryPath);
+  public async pull(repositoryPath: string, strategy?: PullStrategy): Promise<void> {
+    await this.gitAdapter.pull(repositoryPath, strategy);
   }
 
-  public async pullBranch(repositoryPath: string, branch: string): Promise<void> {
-    await this.gitAdapter.pullBranch(repositoryPath, branch);
+  public async pullBranch(repositoryPath: string, branch: string, strategy?: PullStrategy): Promise<void> {
+    await this.gitAdapter.pullBranch(repositoryPath, branch, strategy);
   }
 
   public async push(repositoryPath: string): Promise<string> {
@@ -143,6 +148,22 @@ export class RepositoryManager {
     await this.gitAdapter.rebaseBranch(repositoryPath, branch);
   }
 
+  public async continueOperation(repositoryPath: string, operation: GitOperationType): Promise<void> {
+    await this.gitAdapter.continueOperation(repositoryPath, operation);
+  }
+
+  public async abortOperation(repositoryPath: string, operation: GitOperationType): Promise<void> {
+    await this.gitAdapter.abortOperation(repositoryPath, operation);
+  }
+
+  public async skipOperation(repositoryPath: string, operation: GitOperationType): Promise<void> {
+    await this.gitAdapter.skipOperation(repositoryPath, operation);
+  }
+
+  public async getOperationState(repositoryPath: string): Promise<GitOperationState | undefined> {
+    return this.gitAdapter.getOperationState(repositoryPath);
+  }
+
   public async stashPush(repositoryPath: string, message?: string): Promise<void> {
     await this.gitAdapter.stashPush(repositoryPath, message);
   }
@@ -163,8 +184,20 @@ export class RepositoryManager {
     return this.gitAdapter.readConflictStage(repositoryPath, filePath, stage);
   }
 
+  public async hasConflictStage(repositoryPath: string, filePath: string, stage: 1 | 2 | 3): Promise<boolean> {
+    return this.gitAdapter.hasConflictStage(repositoryPath, filePath, stage);
+  }
+
   public async markResolved(repositoryPath: string, filePath: string): Promise<void> {
     await this.gitAdapter.markResolved(repositoryPath, filePath);
+  }
+
+  public async resolveConflictWithSide(
+    repositoryPath: string,
+    filePath: string,
+    side: "current" | "incoming"
+  ): Promise<void> {
+    await this.gitAdapter.resolveConflictWithSide(repositoryPath, filePath, side);
   }
 
   public async getLog(repositoryPath: string, maxCount?: number): Promise<readonly CommitLogEntry[]> {

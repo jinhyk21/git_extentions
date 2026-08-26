@@ -1,192 +1,526 @@
 import type { Webview } from "vscode";
 import type { ConflictSegment } from "../../core/git/parseConflictMarkers";
+import { translate, type AppLanguage, type TranslationValues } from "../../shared/i18n";
+import type { GitOperationState } from "../../shared/types/repository";
 
-export function getConflictResolutionHtml(webview: Webview, filePath: string, segments: readonly ConflictSegment[]): string {
+export type ConflictEditorData = {
+  readonly filePath: string;
+  readonly repositoryName: string;
+  readonly result: string;
+  readonly base: string;
+  readonly current: string;
+  readonly incoming: string;
+  readonly baseExists: boolean;
+  readonly currentExists: boolean;
+  readonly incomingExists: boolean;
+  readonly segments: readonly ConflictSegment[];
+  readonly operation?: GitOperationState;
+  readonly language?: AppLanguage;
+};
+
+export function getConflictResolutionHtml(webview: Webview, data: ConflictEditorData): string {
   const nonce = createNonce();
-  const dataScript = JSON.stringify({ filePath, segments });
+  const language = data.language ?? "en";
+  const tr = (message: string, values?: TranslationValues) => translate(language, message, values);
+  const translations = Object.fromEntries(CONFLICT_TRANSLATION_KEYS.map((message) => [message, tr(message)]));
+  const dataScript = serializeForInlineScript({ ...data, language, translations });
 
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="${language}">
 <head>
 <meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';" />
-<title>Resolve Conflict</title>
+<title>${escapeHtml(tr("Merge Revisions"))}</title>
 <style>
   :root {
-    color-scheme: light dark;
+    color-scheme: dark;
+    --bg: var(--vscode-editor-background, #1e1f22);
+    --panel: var(--vscode-sideBar-background, #2b2d30);
+    --panel-2: var(--vscode-editorGroupHeader-tabsBackground, #252629);
+    --border: var(--vscode-panel-border, #3c3f41);
+    --text: var(--vscode-editor-foreground, #bcbec4);
+    --muted: var(--vscode-descriptionForeground, #868a91);
+    --blue: var(--vscode-charts-blue, #3574a8);
+    --blue-soft: color-mix(in srgb, var(--blue) 35%, transparent);
+    --green: var(--vscode-charts-green, #397b53);
+    --green-soft: color-mix(in srgb, var(--green) 38%, transparent);
+    --red: var(--vscode-charts-red, #8b4b3e);
+    --red-soft: color-mix(in srgb, var(--red) 36%, transparent);
+    --line-height: 22px;
   }
+  * { box-sizing: border-box; }
   body {
-    font-family: var(--vscode-font-family, sans-serif);
-    color: var(--vscode-foreground);
-    background: var(--vscode-editor-background);
     margin: 0;
-    padding: 0;
+    height: 100vh;
+    min-width: 0;
     display: flex;
     flex-direction: column;
-    height: 100vh;
+    overflow: hidden;
+    color: var(--text);
+    background: var(--bg);
+    font-family: var(--vscode-font-family, Inter, sans-serif);
   }
-  header {
-    padding: 8px 12px;
-    border-bottom: 1px solid var(--vscode-panel-border);
+  button, select { font: inherit; }
+  button {
+    border: 1px solid transparent;
+    border-radius: 4px;
+    min-height: 28px;
+    padding: 3px 9px;
+    color: var(--text);
+    background: transparent;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  button:hover {
+    border-color: var(--border);
+    background: color-mix(in srgb, var(--text) 10%, transparent);
+  }
+  button:disabled { opacity: .42; cursor: not-allowed; }
+  button.primary {
+    color: var(--vscode-button-foreground, #fff);
+    background: var(--vscode-button-background, #0e639c);
+  }
+  button.primary:hover { background: var(--vscode-button-hoverBackground, #1177bb); }
+  .titlebar {
+    flex: 0 0 auto;
+    min-height: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+  }
+  .titlebar strong {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 14px;
+  }
+  .merge-toolbar {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    min-height: 42px;
+    padding: 5px 9px;
+    overflow-x: auto;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+  }
+  .toolbar-separator {
+    width: 1px;
+    align-self: stretch;
+    margin: 2px 4px;
+    background: var(--border);
+  }
+  .toolbar-label {
+    color: var(--muted);
+    font-size: 11px;
+    white-space: nowrap;
+  }
+  .icon-button {
+    min-width: 30px;
+    padding: 2px 7px;
+    font-size: 17px;
+    line-height: 1;
+  }
+  .accept-button { white-space: nowrap; }
+  select {
+    min-height: 28px;
+    padding: 2px 28px 2px 8px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text);
+    background: var(--panel-2);
+  }
+  .operation-meta {
+    margin-left: auto;
+    color: var(--muted);
+    font-size: 11px;
+    white-space: nowrap;
+  }
+  .workspace {
+    min-height: 0;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .column-headers,
+  .merge-grid {
+    display: grid;
+    grid-template-columns:
+      minmax(280px, 1fr)
+      48px
+      minmax(320px, 1.15fr)
+      48px
+      minmax(280px, 1fr);
+    min-width: 1040px;
+  }
+  .column-headers {
+    flex: 0 0 auto;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel-2);
+  }
+  .column-header {
+    min-width: 0;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    flex: 0 0 auto;
-  }
-  header h1 {
-    font-size: 13px;
-    font-weight: 600;
-    margin: 0;
-  }
-  .toolbar button {
-    background: var(--vscode-button-background);
-    color: var(--vscode-button-foreground);
-    border: none;
-    padding: 4px 12px;
-    border-radius: 2px;
-    cursor: pointer;
-    margin-left: 8px;
+    height: 34px;
+    padding: 0 10px;
     font-size: 12px;
+    font-weight: 600;
   }
-  .toolbar button:hover {
-    background: var(--vscode-button-hoverBackground);
+  .column-header.left { color: #72a7d8; }
+  .column-header.result {
+    color: #82b1df;
+    border-left: 1px solid var(--border);
+    border-right: 1px solid var(--border);
   }
-  .toolbar button.secondary {
-    background: var(--vscode-button-secondaryBackground);
-    color: var(--vscode-button-secondaryForeground);
+  .column-header.right { color: #78c092; }
+  .column-header small {
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 500;
   }
-  main {
-    flex: 1 1 auto;
+  .header-gutter { border-left: 1px solid var(--border); border-right: 1px solid var(--border); }
+  .editor-scroll {
+    min-height: 0;
+    flex: 1;
     overflow: auto;
-    padding: 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
+    scrollbar-color: var(--muted) transparent;
   }
-  .segment-context {
+  .merge-grid { align-content: start; }
+  .code-cell,
+  .result-cell,
+  .action-gutter {
+    min-width: 0;
+    position: relative;
+    border-bottom: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+  }
+  .code-cell,
+  .result-cell {
+    display: flex;
+    min-height: var(--line-height);
+    background: var(--bg);
+  }
+  .code-cell.left { border-right: 1px solid var(--border); }
+  .code-cell.right { border-left: 1px solid var(--border); }
+  .line-numbers {
+    flex: 0 0 44px;
+    padding: 3px 8px 3px 4px;
+    text-align: right;
     white-space: pre;
-    font-family: var(--vscode-editor-font-family, monospace);
+    user-select: none;
+    color: color-mix(in srgb, var(--muted) 65%, transparent);
+    background: color-mix(in srgb, var(--panel-2) 55%, transparent);
+    border-right: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+    font-family: var(--vscode-editor-font-family, "JetBrains Mono", monospace);
     font-size: var(--vscode-editor-font-size, 13px);
-    color: var(--vscode-descriptionForeground);
-    padding: 2px 8px;
+    line-height: var(--line-height);
   }
-  .conflict-block {
-    border: 1px solid var(--vscode-panel-border);
-    border-radius: 4px;
-    overflow: hidden;
-  }
-  .conflict-block.unresolved {
-    border-color: var(--vscode-gitDecoration-conflictingResourceForeground, #d9534f);
-  }
-  .conflict-columns {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-  }
-  .conflict-side {
-    padding: 6px 8px;
-    white-space: pre-wrap;
-    font-family: var(--vscode-editor-font-family, monospace);
-    font-size: var(--vscode-editor-font-size, 13px);
-    border-right: 1px solid var(--vscode-panel-border);
-  }
-  .conflict-side.theirs {
-    border-right: none;
-  }
-  .conflict-side.ours {
-    background: color-mix(in srgb, var(--vscode-gitDecoration-modifiedResourceForeground, #2090c0) 8%, transparent);
-  }
-  .conflict-side.theirs {
-    background: color-mix(in srgb, var(--vscode-gitDecoration-addedResourceForeground, #2fa72f) 8%, transparent);
-  }
-  .conflict-side-label {
-    font-weight: 600;
-    font-size: 11px;
-    text-transform: uppercase;
-    opacity: 0.75;
-    margin-bottom: 4px;
-    display: block;
-  }
-  .conflict-actions {
-    display: flex;
-    gap: 6px;
-    padding: 6px 8px;
-    border-top: 1px solid var(--vscode-panel-border);
-    background: var(--vscode-editorWidget-background);
-  }
-  .conflict-actions button {
-    background: var(--vscode-button-secondaryBackground);
-    color: var(--vscode-button-secondaryForeground);
-    border: none;
-    padding: 3px 10px;
-    border-radius: 2px;
-    cursor: pointer;
-    font-size: 11px;
-  }
-  .conflict-actions button:hover {
-    background: var(--vscode-button-secondaryHoverBackground);
-  }
-  .conflict-actions button.active {
-    background: var(--vscode-button-background);
-    color: var(--vscode-button-foreground);
-  }
-  #saveButton:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-  .result-section {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    flex: 1 1 auto;
-    min-height: 200px;
-  }
-  .result-section h2 {
-    font-size: 12px;
-    font-weight: 600;
+  pre.code {
+    flex: 1;
+    min-width: 0;
     margin: 0;
-    opacity: 0.85;
-  }
-  #result {
-    flex: 1 1 auto;
-    width: 100%;
-    min-height: 200px;
-    resize: vertical;
-    font-family: var(--vscode-editor-font-family, monospace);
+    padding: 3px 9px;
+    overflow: hidden;
+    white-space: pre;
+    color: var(--text);
+    font-family: var(--vscode-editor-font-family, "JetBrains Mono", monospace);
     font-size: var(--vscode-editor-font-size, 13px);
-    background: var(--vscode-input-background);
-    color: var(--vscode-input-foreground);
-    border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
-    padding: 8px;
-    box-sizing: border-box;
+    line-height: var(--line-height);
+    tab-size: 2;
   }
-  .status-line {
+  .context-cell pre.code { color: color-mix(in srgb, var(--text) 88%, transparent); }
+  .conflict-cell.left { background: var(--blue-soft); }
+  .conflict-cell.right { background: var(--green-soft); }
+  .conflict-cell.deleted {
+    background:
+      repeating-linear-gradient(
+        -45deg,
+        color-mix(in srgb, var(--red) 28%, transparent),
+        color-mix(in srgb, var(--red) 28%, transparent) 7px,
+        transparent 7px,
+        transparent 14px
+      );
+  }
+  .empty-side {
+    padding: 6px 10px;
+    color: var(--muted);
+    font-style: italic;
+  }
+  .word-change {
+    padding: 1px 0;
+    border-radius: 2px;
+    background: color-mix(in srgb, #79aee3 45%, transparent);
+  }
+  .right .word-change { background: color-mix(in srgb, #74b68b 45%, transparent); }
+  .action-gutter {
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 2px;
+    padding-top: 3px;
+    border-left: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+    background: var(--panel-2);
+  }
+  .action-gutter.conflict-left {
+    background: linear-gradient(90deg, var(--blue-soft), color-mix(in srgb, var(--blue) 18%, var(--panel-2)));
+  }
+  .action-gutter.conflict-right {
+    background: linear-gradient(90deg, color-mix(in srgb, var(--green) 18%, var(--panel-2)), var(--green-soft));
+  }
+  .action-gutter.conflict-left::before,
+  .action-gutter.conflict-right::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    opacity: .72;
+    pointer-events: none;
+  }
+  .action-gutter.conflict-left::before {
+    background: var(--blue-soft);
+    clip-path: polygon(0 0, 62% 0, 100% 25%, 100% 75%, 62% 100%, 0 100%);
+  }
+  .action-gutter.conflict-right::before {
+    background: var(--green-soft);
+    clip-path: polygon(38% 0, 100% 0, 100% 100%, 38% 100%, 0 75%, 0 25%);
+  }
+  .hunk-action {
+    position: relative;
+    z-index: 1;
+    min-width: 20px;
+    min-height: 23px;
+    padding: 0 3px;
+    border-radius: 2px;
+    color: color-mix(in srgb, var(--text) 88%, transparent);
+    font-size: 18px;
+    line-height: 20px;
+  }
+  .hunk-action.reject { font-size: 15px; }
+  .result-cell {
+    flex-direction: column;
+    border-left: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+  }
+  .result-cell.active {
+    outline: 1px solid color-mix(in srgb, var(--blue) 75%, white);
+    outline-offset: -1px;
+  }
+  .result-cell.unresolved { background: var(--red-soft); }
+  .result-cell.choice-current { background: var(--blue-soft); }
+  .result-cell.choice-incoming { background: var(--green-soft); }
+  .result-cell.choice-both {
+    background: linear-gradient(90deg, var(--blue-soft), var(--green-soft));
+  }
+  .result-cell.choice-base { background: color-mix(in srgb, #a078c2 30%, transparent); }
+  .result-toolbar {
+    display: flex;
+    justify-content: flex-end;
+    gap: 3px;
+    min-height: 27px;
+    padding: 2px 5px;
+    border-bottom: 1px solid color-mix(in srgb, var(--border) 65%, transparent);
+  }
+  .result-toolbar span {
+    margin-right: auto;
+    align-self: center;
+    color: var(--muted);
+    font-size: 10px;
+  }
+  .result-toolbar button {
+    min-height: 21px;
+    padding: 0 6px;
+    font-size: 10px;
+  }
+  .result-edit-wrap {
+    min-height: var(--line-height);
+    flex: 1;
+    display: flex;
+  }
+  textarea.result-editor {
+    flex: 1;
+    min-width: 0;
+    min-height: 100%;
+    resize: none;
+    overflow: hidden;
+    border: 0;
+    outline: 0;
+    padding: 3px 9px;
+    color: var(--text);
+    background: transparent;
+    font-family: var(--vscode-editor-font-family, "JetBrains Mono", monospace);
+    font-size: var(--vscode-editor-font-size, 13px);
+    line-height: var(--line-height);
+    white-space: pre;
+    tab-size: 2;
+  }
+  textarea.result-editor::placeholder {
+    color: color-mix(in srgb, var(--muted) 72%, transparent);
+    font-style: italic;
+  }
+  .syntax-keyword { color: #cf8e6d; }
+  .syntax-string { color: #6aab73; }
+  .syntax-comment { color: #7a7e85; font-style: italic; }
+  .syntax-number { color: #2aacb8; }
+  .base-panel {
+    flex: 0 0 auto;
+    display: none;
+    max-height: 28vh;
+    overflow: auto;
+    border-top: 1px solid var(--border);
+    background: var(--panel-2);
+  }
+  .base-panel.visible { display: block; }
+  .base-panel header {
+    position: sticky;
+    top: 0;
+    padding: 6px 10px;
+    color: #b493d2;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
     font-size: 11px;
-    opacity: 0.7;
+    font-weight: 600;
+  }
+  .base-panel pre {
+    margin: 0;
+    padding: 8px 12px;
+    white-space: pre;
+    font-family: var(--vscode-editor-font-family, "JetBrains Mono", monospace);
+    font-size: var(--vscode-editor-font-size, 13px);
+    line-height: var(--line-height);
+  }
+  .statusbar {
+    flex: 0 0 auto;
+    min-height: 26px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 3px 10px;
+    border-top: 1px solid var(--border);
+    color: var(--muted);
+    background: var(--panel);
+    font-size: 11px;
+  }
+  .statusbar .ready { color: #73bd8b; }
+  .statusbar .warning { color: #d89278; }
+  @media (max-width: 900px) {
+    .titlebar { justify-content: flex-start; }
+    .merge-toolbar { flex-wrap: nowrap; }
+    .operation-meta { margin-left: 0; }
+  }
+  @media (max-width: 1300px) {
+    .toolbar-label,
+    .operation-meta { display: none; }
   }
 </style>
 </head>
 <body>
-<header>
-  <h1 id="title"></h1>
-  <div class="toolbar">
-    <span class="status-line" id="remainingStatus"></span>
-    <button class="secondary" id="acceptAllOursButton">Accept All Current</button>
-    <button class="secondary" id="acceptAllTheirsButton">Accept All Incoming</button>
-    <button class="secondary" id="cancelButton">Cancel</button>
-    <button id="saveButton">Save &amp; Mark Resolved</button>
-  </div>
-</header>
-<main id="segments"></main>
-<div class="result-section" style="padding: 0 12px 12px;">
-  <h2>Result</h2>
-  <textarea id="result" spellcheck="false"></textarea>
+<div class="titlebar">
+  <strong id="mergeTitle"></strong>
 </div>
+<div class="merge-toolbar">
+  <span class="toolbar-label">${escapeHtml(tr("Apply non-conflicting changes:"))}</span>
+  <button class="accept-button" id="acceptAllCurrentButton" title="${escapeHtml(tr("Accept every current-side conflict"))}">≫ ${escapeHtml(tr("Left"))}</button>
+  <button class="accept-button" id="acceptAllBothButton" title="${escapeHtml(tr("Accept both sides for every conflict"))}">≫≪ ${escapeHtml(tr("All"))}</button>
+  <button class="accept-button" id="acceptAllIncomingButton" title="${escapeHtml(tr("Accept every incoming-side conflict"))}">≪ ${escapeHtml(tr("Right"))}</button>
+  <span class="toolbar-separator"></span>
+  <button class="icon-button" id="previousButton" title="${escapeHtml(tr("Previous conflict"))}">↑</button>
+  <button class="icon-button" id="nextButton" title="${escapeHtml(tr("Next conflict"))}">↓</button>
+  <select id="ignoreMode" title="${escapeHtml(tr("Whitespace comparison"))}">
+    <option value="none">${escapeHtml(tr("Do not ignore"))}</option>
+    <option value="trim">${escapeHtml(tr("Ignore leading/trailing whitespace"))}</option>
+    <option value="all">${escapeHtml(tr("Ignore whitespaces"))}</option>
+  </select>
+  <select id="highlightMode" title="${escapeHtml(tr("Difference highlighting"))}">
+    <option value="words">${escapeHtml(tr("Highlight words"))}</option>
+    <option value="lines">${escapeHtml(tr("Highlight lines"))}</option>
+  </select>
+  <button id="detailsButton" title="${escapeHtml(tr("Show or hide the Base revision"))}">${escapeHtml(tr("Details"))}</button>
+  <button id="nativeButton" title="${escapeHtml(tr("Open the VS Code native Merge Editor"))}">${escapeHtml(tr("Native"))}</button>
+  <span class="operation-meta" id="operationMeta"></span>
+  <button class="icon-button" id="cancelButton" title="${escapeHtml(tr("Close without applying"))}">✕</button>
+  <button class="primary" id="saveButton">${escapeHtml(tr("Apply"))}</button>
+</div>
+<main class="workspace">
+  <div class="column-headers">
+    <div class="column-header left"><span id="currentTitle"></span><small>${escapeHtml(tr("Read-only"))}</small></div>
+    <div class="header-gutter"></div>
+    <div class="column-header result"><span>${escapeHtml(tr("Result"))}</span><small>${escapeHtml(tr("Editable"))}</small></div>
+    <div class="header-gutter"></div>
+    <div class="column-header right"><span id="incomingTitle"></span><small>${escapeHtml(tr("Read-only"))}</small></div>
+  </div>
+  <div class="editor-scroll" id="editorScroll">
+    <div class="merge-grid" id="mergeGrid"></div>
+  </div>
+</main>
+<section class="base-panel" id="basePanel">
+  <header>${escapeHtml(tr("Base revision"))}</header>
+  <pre id="baseContent"></pre>
+</section>
+<footer class="statusbar">
+  <span id="conflictStatus"></span>
+  <span id="selectionStatus"></span>
+  <span id="fileStatus"></span>
+</footer>
 <script nonce="${nonce}">
   const conflictData = ${dataScript};
   ${getClientScript()}
 </script>
 </body>
 </html>`;
+}
+
+const CONFLICT_TRANSLATION_KEYS = [
+  "Merge Revisions for {file}",
+  "Base revision is unavailable.",
+  "Changes from {source}",
+  "current branch",
+  "incoming branch",
+  "Current",
+  "Incoming",
+  "Deleted in {side}",
+  "Reject current change",
+  "Accept current change",
+  "Accept incoming change",
+  "Reject incoming change",
+  "Conflict {number}",
+  "Base",
+  "Both",
+  "Mark Resolved",
+  "Reset",
+  "Resolve with arrows or edit the Result here…",
+  "Selected conflict {current}/{total}",
+  "Delete",
+  "Apply",
+  "{resolved} / {total} conflicts resolved",
+  "Conflict markers remain",
+  "Result is ready to apply",
+  "Resolve every highlighted block",
+  "Hide Details",
+  "Details"
+] as const;
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function serializeForInlineScript(value: unknown): string {
+  return JSON.stringify(value)
+    .replace(/</g, "\\u003c")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
 }
 
 function createNonce(): string {
@@ -201,178 +535,546 @@ function createNonce(): string {
 function getClientScript(): string {
   return `
   const vscodeApi = acquireVsCodeApi();
-  document.getElementById('title').textContent = conflictData.filePath;
+  function tr(message, values = {}) {
+    const localized = conflictData.translations[message] || message;
+    return localized.replace(/\\{(\\w+)\\}/g, (match, key) =>
+      Object.prototype.hasOwnProperty.call(values, key) ? String(values[key]) : match
+    );
+  }
+  const mergeGrid = document.getElementById('mergeGrid');
+  const editorScroll = document.getElementById('editorScroll');
+  const saveButton = document.getElementById('saveButton');
+  const conflictStatus = document.getElementById('conflictStatus');
+  const selectionStatus = document.getElementById('selectionStatus');
+  const fileStatus = document.getElementById('fileStatus');
+  const originalEndsWithNewline = conflictData.result.endsWith('\\n');
+  const conflictRows = [];
+  const resultEditors = [];
+  let activeConflictIndex = 0;
+  let deleteResult = false;
+  let highlightMode = 'words';
+  let ignoreMode = 'none';
 
-  const segmentsRoot = document.getElementById('segments');
-  const resultArea = document.getElementById('result');
-  const remainingStatus = document.getElementById('remainingStatus');
+  const parsedConflicts = conflictData.segments.filter((segment) => segment.kind === 'conflict');
+  const hasMarkerConflicts = parsedConflicts.length > 0;
+  const editorSegments = hasMarkerConflicts
+    ? conflictData.segments
+    : [{
+        kind: 'conflict',
+        oursLabel: 'Current',
+        theirsLabel: 'Incoming',
+        ours: conflictData.current,
+        theirs: conflictData.incoming,
+        base: conflictData.base,
+        synthetic: true,
+        initialResult: conflictData.result
+      }];
 
-  // No default choice — every conflict block starts unresolved so the user
-  // must explicitly pick a side (or "both") for each one before saving.
-  // Auto-picking "ours" here previously caused unresolved conflicts to be
-  // silently saved as "keep my version" without the user ever choosing.
-  const choices = new Map();
-  let conflictIndex = 0;
-  let totalConflicts = 0;
+  document.getElementById('mergeTitle').textContent =
+    tr('Merge Revisions for {file}', { file: conflictData.filePath });
+  document.getElementById('operationMeta').textContent =
+    conflictData.repositoryName + (conflictData.operation ? ' · ' + formatOperation(conflictData.operation) : '');
+  document.getElementById('baseContent').textContent =
+    conflictData.baseExists ? conflictData.base : tr('Base revision is unavailable.');
+  document.getElementById('currentTitle').textContent =
+    tr('Changes from {source}', { source: currentLabel() });
+  document.getElementById('incomingTitle').textContent =
+    tr('Changes from {source}', { source: incomingLabel() });
 
-  function createTextBlock(tagName, text, className) {
-    const element = document.createElement(tagName);
-    if (className) {
-      element.className = className;
+  function currentLabel() {
+    const conflict = parsedConflicts[0];
+    return conflict && conflict.oursLabel && conflict.oursLabel !== 'HEAD'
+      ? conflict.oursLabel
+      : tr('current branch');
+  }
+
+  function incomingLabel() {
+    const conflict = parsedConflicts[0];
+    return conflict && conflict.theirsLabel
+      ? conflict.theirsLabel
+      : tr('incoming branch');
+  }
+
+  function formatOperation(operation) {
+    const name = operation.type
+      .split('-')
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ');
+    return operation.currentStep && operation.totalSteps
+      ? name + ' ' + operation.currentStep + '/' + operation.totalSteps
+      : name;
+  }
+
+  function normalizeForComparison(value) {
+    if (ignoreMode === 'trim') {
+      return value.split('\\n').map((line) => line.trim()).join('\\n');
     }
-    element.textContent = text;
-    return element;
-  }
-
-  function renderSegments() {
-    segmentsRoot.textContent = '';
-    conflictIndex = 0;
-
-    for (const segment of conflictData.segments) {
-      if (segment.kind === 'context') {
-        if (segment.text.length > 0) {
-          segmentsRoot.appendChild(createTextBlock('div', segment.text, 'segment-context'));
-        }
-        continue;
-      }
-
-      const currentIndex = conflictIndex;
-      conflictIndex += 1;
-      if (!choices.has(currentIndex)) {
-        choices.set(currentIndex, null);
-      }
-
-      const block = document.createElement('div');
-      block.className = 'conflict-block';
-      block.dataset.blockIndex = String(currentIndex);
-
-      const columns = document.createElement('div');
-      columns.className = 'conflict-columns';
-      columns.appendChild(buildSide('ours', segment.oursLabel, segment.ours));
-      columns.appendChild(buildSide('theirs', segment.theirsLabel, segment.theirs));
-      block.appendChild(columns);
-
-      const actions = document.createElement('div');
-      actions.className = 'conflict-actions';
-      actions.appendChild(buildActionButton(currentIndex, 'ours', 'Accept Current'));
-      actions.appendChild(buildActionButton(currentIndex, 'theirs', 'Accept Incoming'));
-      actions.appendChild(buildActionButton(currentIndex, 'both', 'Accept Both'));
-      block.appendChild(actions);
-
-      segmentsRoot.appendChild(block);
+    if (ignoreMode === 'all') {
+      return value.replace(/\\s+/g, '');
     }
-
-    totalConflicts = conflictIndex;
-    refreshActionStates();
+    return value;
   }
 
-  function buildSide(kind, label, text) {
-    const container = document.createElement('div');
-    container.className = 'conflict-side ' + kind;
-    container.appendChild(createTextBlock('span', label, 'conflict-side-label'));
-    container.appendChild(createTextBlock('div', text, null));
-    return container;
+  function splitLines(value) {
+    if (value.length === 0) {
+      return [];
+    }
+    return value.split('\\n');
   }
 
-  function buildActionButton(index, choice, label) {
-    const button = document.createElement('button');
-    button.textContent = label;
-    button.dataset.index = String(index);
-    button.dataset.choice = choice;
-    button.addEventListener('click', () => {
-      choices.set(index, choice);
-      refreshActionStates();
-      rebuildResult();
+  function lineNumbers(start, count) {
+    return Array.from({ length: count }, (_, index) => String(start + index)).join('\\n');
+  }
+
+  function tokenize(value) {
+    return value.match(/\\/\\/[^\\n]*|"(?:\\\\.|[^"\\\\])*"|'(?:\\\\.|[^'\\\\])*'|\\s+|[A-Za-z_$][\\w$]*|\\d+(?:\\.\\d+)?|./gs) || [];
+  }
+
+  function syntaxClass(token) {
+    if (/^\\/\\//.test(token)) {
+      return 'syntax-comment';
+    }
+    if (/^["']/.test(token)) {
+      return 'syntax-string';
+    }
+    if (/^(?:export|import|from|function|return|const|let|var|class|interface|type|public|private|protected|async|await|if|else|for|while|new|throw|try|catch|finally|extends|implements|readonly|static|void|string|number|boolean)$/.test(token)) {
+      return 'syntax-keyword';
+    }
+    if (/^\\d/.test(token)) {
+      return 'syntax-number';
+    }
+    return '';
+  }
+
+  function changedTokenMask(value, otherValue) {
+    const tokens = tokenize(value);
+    const otherTokens = tokenize(otherValue);
+    if (tokens.length > 220 || otherTokens.length > 220) {
+      return { tokens, changed: tokens.map(() => true) };
+    }
+    const rows = tokens.length + 1;
+    const columns = otherTokens.length + 1;
+    const table = Array.from({ length: rows }, () => new Uint16Array(columns));
+    for (let leftIndex = tokens.length - 1; leftIndex >= 0; leftIndex -= 1) {
+      for (let rightIndex = otherTokens.length - 1; rightIndex >= 0; rightIndex -= 1) {
+        table[leftIndex][rightIndex] = tokens[leftIndex] === otherTokens[rightIndex]
+          ? table[leftIndex + 1][rightIndex + 1] + 1
+          : Math.max(table[leftIndex + 1][rightIndex], table[leftIndex][rightIndex + 1]);
+      }
+    }
+    const matched = new Set();
+    let leftIndex = 0;
+    let rightIndex = 0;
+    while (leftIndex < tokens.length && rightIndex < otherTokens.length) {
+      if (tokens[leftIndex] === otherTokens[rightIndex]) {
+        matched.add(leftIndex);
+        leftIndex += 1;
+        rightIndex += 1;
+      } else if (table[leftIndex + 1][rightIndex] >= table[leftIndex][rightIndex + 1]) {
+        leftIndex += 1;
+      } else {
+        rightIndex += 1;
+      }
+    }
+    return {
+      tokens,
+      changed: tokens.map((_, index) => !matched.has(index))
+    };
+  }
+
+  function renderCode(pre, value, otherValue, isConflict) {
+    pre.textContent = '';
+    pre.dataset.text = value;
+    pre.dataset.other = otherValue;
+    pre.dataset.conflict = String(isConflict);
+    const diff = isConflict && highlightMode === 'words' && normalizeForComparison(value) !== normalizeForComparison(otherValue)
+      ? changedTokenMask(value, otherValue)
+      : { tokens: tokenize(value), changed: tokenize(value).map(() => false) };
+    diff.tokens.forEach((token, index) => {
+      const tokenSyntaxClass = syntaxClass(token);
+      const isChanged = diff.changed[index] && !/^\\s+$/.test(token);
+      if (!isChanged && !tokenSyntaxClass) {
+        pre.appendChild(document.createTextNode(token));
+        return;
+      }
+      const span = document.createElement('span');
+      span.className = [isChanged ? 'word-change' : '', tokenSyntaxClass].filter(Boolean).join(' ');
+      span.textContent = token;
+      pre.appendChild(span);
     });
+  }
+
+  function createCodeCell(side, value, otherValue, startLine, isConflict, exists = true) {
+    const cell = document.createElement('div');
+    cell.className = 'code-cell ' + side + ' ' + (isConflict ? 'conflict-cell' : 'context-cell');
+    if (!exists) {
+      cell.classList.add('deleted');
+      const deleted = document.createElement('div');
+      deleted.className = 'empty-side';
+      deleted.textContent = '<' + tr('Deleted in {side}', {
+        side: side === 'left' ? tr('Current') : tr('Incoming')
+      }) + '>';
+      cell.appendChild(deleted);
+      return cell;
+    }
+
+    const lines = splitLines(value);
+    const numbers = document.createElement('div');
+    numbers.className = 'line-numbers';
+    numbers.textContent = lineNumbers(startLine, lines.length);
+    const pre = document.createElement('pre');
+    pre.className = 'code';
+    renderCode(pre, value, otherValue, isConflict);
+    cell.appendChild(numbers);
+    cell.appendChild(pre);
+    return cell;
+  }
+
+  function createGutter(side, conflictIndex, isConflict) {
+    const gutter = document.createElement('div');
+    gutter.className = 'action-gutter' + (isConflict ? ' conflict-' + side : '');
+    if (!isConflict) {
+      return gutter;
+    }
+
+    if (side === 'left') {
+      gutter.appendChild(actionButton('×', tr('Reject current change'), () => resetConflict(conflictIndex), 'reject'));
+      gutter.appendChild(actionButton('»', tr('Accept current change'), () => chooseConflict(conflictIndex, 'current')));
+    } else {
+      gutter.appendChild(actionButton('«', tr('Accept incoming change'), () => chooseConflict(conflictIndex, 'incoming')));
+      gutter.appendChild(actionButton('×', tr('Reject incoming change'), () => resetConflict(conflictIndex), 'reject'));
+    }
+    return gutter;
+  }
+
+  function actionButton(text, title, handler, extraClass = '') {
+    const button = document.createElement('button');
+    button.className = 'hunk-action ' + extraClass;
+    button.textContent = text;
+    button.title = title;
+    button.addEventListener('click', handler);
     return button;
   }
 
-  function refreshActionStates() {
-    const buttons = segmentsRoot.querySelectorAll('.conflict-actions button');
-    for (const button of buttons) {
-      const index = Number(button.dataset.index);
-      const isActive = choices.get(index) === button.dataset.choice;
-      button.classList.toggle('active', isActive);
-    }
+  function createResultCell(segment, conflictIndex, startLine, minLines, isConflict) {
+    const cell = document.createElement('div');
+    cell.className = 'result-cell ' + (isConflict ? 'unresolved' : 'context-cell');
+    cell.dataset.conflictIndex = isConflict ? String(conflictIndex) : '';
+    cell.style.minHeight = Math.max(1, minLines) * 22 + (isConflict ? 29 : 0) + 'px';
 
-    const blocks = segmentsRoot.querySelectorAll('.conflict-block');
-    let resolvedCount = 0;
-    for (const block of blocks) {
-      const index = Number(block.dataset.blockIndex);
-      const isResolved = Boolean(choices.get(index));
-      block.classList.toggle('unresolved', !isResolved);
-      if (isResolved) {
-        resolvedCount += 1;
+    if (isConflict) {
+      const toolbar = document.createElement('div');
+      toolbar.className = 'result-toolbar';
+      const label = document.createElement('span');
+      label.textContent = tr('Conflict {number}', { number: conflictIndex + 1 });
+      toolbar.appendChild(label);
+      if (segment.base !== undefined) {
+        toolbar.appendChild(smallButton(tr('Base'), () => chooseConflict(conflictIndex, 'base')));
       }
+      toolbar.appendChild(smallButton(tr('Both'), () => chooseConflict(conflictIndex, 'both')));
+      toolbar.appendChild(smallButton(tr('Mark Resolved'), () => markManualResolved(conflictIndex)));
+      toolbar.appendChild(smallButton(tr('Reset'), () => resetConflict(conflictIndex)));
+      cell.appendChild(toolbar);
     }
 
-    remainingStatus.textContent = resolvedCount + ' / ' + totalConflicts + ' conflicts resolved';
-
-    const saveButton = document.getElementById('saveButton');
-    saveButton.disabled = resolvedCount < totalConflicts;
-    saveButton.title = saveButton.disabled
-      ? 'Resolve every conflicting section before saving'
-      : '';
+    const wrap = document.createElement('div');
+    wrap.className = 'result-edit-wrap';
+    const numbers = document.createElement('div');
+    numbers.className = 'line-numbers result-line-numbers';
+    numbers.dataset.start = String(startLine);
+    const editor = document.createElement('textarea');
+    editor.className = 'result-editor';
+    editor.spellcheck = false;
+    editor.dataset.conflictIndex = isConflict ? String(conflictIndex) : '';
+    editor.value = isConflict
+      ? (segment.synthetic ? segment.initialResult || '' : '')
+      : segment.text;
+    editor.placeholder = isConflict ? tr('Resolve with arrows or edit the Result here…') : '';
+    editor.addEventListener('focus', () => {
+      if (isConflict) {
+        setActiveConflict(conflictIndex);
+      }
+    });
+    editor.addEventListener('input', () => {
+      deleteResult = false;
+      autoSizeEditor(editor);
+      if (isConflict) {
+        const row = conflictRows[conflictIndex];
+        row.resolved = !containsConflictMarkers(editor.value);
+        row.choice = 'manual';
+        applyResultState(row);
+      }
+      recalculateResultLineNumbers();
+      updateState();
+    });
+    wrap.appendChild(numbers);
+    wrap.appendChild(editor);
+    cell.appendChild(wrap);
+    resultEditors.push(editor);
+    requestAnimationFrame(() => autoSizeEditor(editor));
+    return cell;
   }
 
-  function rebuildResult() {
-    const lines = [];
-    let index = 0;
-    for (const segment of conflictData.segments) {
-      if (segment.kind === 'context') {
-        if (segment.text.length > 0) {
-          lines.push(segment.text);
-        }
+  function smallButton(text, handler) {
+    const button = document.createElement('button');
+    button.textContent = text;
+    button.addEventListener('click', handler);
+    return button;
+  }
+
+  function autoSizeEditor(editor) {
+    editor.style.height = 'auto';
+    editor.style.height = Math.max(editor.scrollHeight, 22) + 'px';
+  }
+
+  function buildGrid() {
+    mergeGrid.textContent = '';
+    conflictRows.length = 0;
+    resultEditors.length = 0;
+    let leftLine = 1;
+    let rightLine = 1;
+    let resultLine = 1;
+    let conflictIndex = 0;
+
+    for (const segment of editorSegments) {
+      const isConflict = segment.kind === 'conflict';
+      if (!isConflict) {
+        const count = splitLines(segment.text).length;
+        mergeGrid.appendChild(createCodeCell('left', segment.text, segment.text, leftLine, false));
+        mergeGrid.appendChild(createGutter('left', -1, false));
+        mergeGrid.appendChild(createResultCell(segment, -1, resultLine, count, false));
+        mergeGrid.appendChild(createGutter('right', -1, false));
+        mergeGrid.appendChild(createCodeCell('right', segment.text, segment.text, rightLine, false));
+        leftLine += count;
+        rightLine += count;
+        resultLine += count;
         continue;
       }
 
-      const choice = choices.get(index);
-      index += 1;
+      const leftExists = segment.synthetic ? conflictData.currentExists : true;
+      const rightExists = segment.synthetic ? conflictData.incomingExists : true;
+      const leftCount = leftExists ? splitLines(segment.ours).length : 0;
+      const rightCount = rightExists ? splitLines(segment.theirs).length : 0;
+      const initialResultCount = splitLines(segment.initialResult || '').length;
+      const minLines = Math.max(leftCount, rightCount, initialResultCount, 2);
+      const leftCell = createCodeCell(
+        'left',
+        segment.ours,
+        segment.theirs,
+        leftLine,
+        true,
+        leftExists
+      );
+      const resultCell = createResultCell(segment, conflictIndex, resultLine, minLines, true);
+      const rightCell = createCodeCell(
+        'right',
+        segment.theirs,
+        segment.ours,
+        rightLine,
+        true,
+        rightExists
+      );
+      mergeGrid.appendChild(leftCell);
+      mergeGrid.appendChild(createGutter('left', conflictIndex, true));
+      mergeGrid.appendChild(resultCell);
+      mergeGrid.appendChild(createGutter('right', conflictIndex, true));
+      mergeGrid.appendChild(rightCell);
 
-      if (choice === 'ours') {
-        if (segment.ours.length > 0) {
-          lines.push(segment.ours);
-        }
-      } else if (choice === 'theirs') {
-        if (segment.theirs.length > 0) {
-          lines.push(segment.theirs);
-        }
-      } else if (choice === 'both') {
-        if (segment.ours.length > 0) {
-          lines.push(segment.ours);
-        }
-        if (segment.theirs.length > 0) {
-          lines.push(segment.theirs);
-        }
-      }
+      conflictRows.push({
+        index: conflictIndex,
+        segment,
+        leftCell,
+        resultCell,
+        rightCell,
+        editor: resultEditors[resultEditors.length - 1],
+        resolved: Boolean(segment.synthetic && !containsConflictMarkers(segment.initialResult || '')),
+        choice: segment.synthetic ? 'manual' : null
+      });
+      leftLine += leftCount;
+      rightLine += rightCount;
+      resultLine += initialResultCount;
+      conflictIndex += 1;
     }
-    resultArea.value = lines.join('\\n');
+
+    recalculateResultLineNumbers();
+    setActiveConflict(0);
+    updateState();
+  }
+
+  function chooseConflict(index, choice) {
+    const row = conflictRows[index];
+    if (!row) {
+      return;
+    }
+    const segment = row.segment;
+    if (choice === 'current') {
+      row.editor.value = segment.ours;
+      deleteResult = Boolean(segment.synthetic && !conflictData.currentExists);
+    } else if (choice === 'incoming') {
+      row.editor.value = segment.theirs;
+      deleteResult = Boolean(segment.synthetic && !conflictData.incomingExists);
+    } else if (choice === 'both') {
+      row.editor.value = [segment.ours, segment.theirs].filter(Boolean).join('\\n');
+      deleteResult = false;
+    } else if (choice === 'base') {
+      row.editor.value = segment.base || '';
+      deleteResult = false;
+    }
+    row.choice = choice;
+    row.resolved = true;
+    autoSizeEditor(row.editor);
+    applyResultState(row);
+    recalculateResultLineNumbers();
+    setActiveConflict(index);
+    updateState();
+  }
+
+  function markManualResolved(index) {
+    const row = conflictRows[index];
+    if (!row || containsConflictMarkers(row.editor.value)) {
+      return;
+    }
+    row.choice = 'manual';
+    row.resolved = true;
+    applyResultState(row);
+    updateState();
+  }
+
+  function resetConflict(index) {
+    const row = conflictRows[index];
+    if (!row) {
+      return;
+    }
+    row.editor.value = row.segment.synthetic ? row.segment.initialResult || '' : '';
+    row.choice = row.segment.synthetic ? 'manual' : null;
+    row.resolved = Boolean(row.segment.synthetic && !containsConflictMarkers(row.editor.value));
+    deleteResult = false;
+    autoSizeEditor(row.editor);
+    applyResultState(row);
+    recalculateResultLineNumbers();
+    updateState();
+  }
+
+  function applyResultState(row) {
+    row.resultCell.classList.toggle('unresolved', !row.resolved);
+    row.resultCell.classList.toggle('choice-current', row.choice === 'current');
+    row.resultCell.classList.toggle('choice-incoming', row.choice === 'incoming');
+    row.resultCell.classList.toggle('choice-both', row.choice === 'both');
+    row.resultCell.classList.toggle('choice-base', row.choice === 'base');
   }
 
   function acceptAll(choice) {
-    for (let index = 0; index < totalConflicts; index += 1) {
-      choices.set(index, choice);
-    }
-    refreshActionStates();
-    rebuildResult();
+    conflictRows.forEach((_, index) => chooseConflict(index, choice));
+    setActiveConflict(0);
   }
 
-  document.getElementById('acceptAllOursButton').addEventListener('click', () => acceptAll('ours'));
-  document.getElementById('acceptAllTheirsButton').addEventListener('click', () => acceptAll('theirs'));
-
-  document.getElementById('saveButton').addEventListener('click', () => {
-    const unresolvedCount = totalConflicts - [...choices.values()].filter(Boolean).length;
-    if (unresolvedCount > 0) {
+  function setActiveConflict(index) {
+    if (conflictRows.length === 0) {
       return;
     }
-    vscodeApi.postMessage({ type: 'save', content: resultArea.value });
-  });
+    activeConflictIndex = Math.max(0, Math.min(index, conflictRows.length - 1));
+    conflictRows.forEach((row) => {
+      row.resultCell.classList.toggle('active', row.index === activeConflictIndex);
+    });
+    selectionStatus.textContent = tr('Selected conflict {current}/{total}', {
+      current: activeConflictIndex + 1,
+      total: conflictRows.length
+    });
+  }
 
+  function navigateConflict(direction) {
+    if (conflictRows.length === 0) {
+      return;
+    }
+    const nextIndex = (activeConflictIndex + direction + conflictRows.length) % conflictRows.length;
+    setActiveConflict(nextIndex);
+    conflictRows[nextIndex].leftCell.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }
+
+  function recalculateResultLineNumbers() {
+    let line = 1;
+    resultEditors.forEach((editor) => {
+      const count = splitLines(editor.value).length;
+      const numbers = editor.parentElement.querySelector('.result-line-numbers');
+      numbers.textContent = lineNumbers(line, count);
+      line += count;
+    });
+  }
+
+  function containsConflictMarkers(content) {
+    return /^<{7}(?: .*)?$/m.test(content) || /^>{7}(?: .*)?$/m.test(content);
+  }
+
+  function assembleResult() {
+    const content = resultEditors.map((editor) => editor.value).join('\\n');
+    return originalEndsWithNewline && !content.endsWith('\\n') ? content + '\\n' : content;
+  }
+
+  function updateState() {
+    const resolvedCount = conflictRows.filter((row) => row.resolved).length;
+    const result = assembleResult();
+    const markerFree = !containsConflictMarkers(result);
+    const ready = resolvedCount === conflictRows.length && markerFree;
+    saveButton.disabled = !ready;
+    saveButton.textContent = deleteResult ? tr('Delete') : tr('Apply');
+    conflictStatus.textContent = tr('{resolved} / {total} conflicts resolved', {
+      resolved: resolvedCount,
+      total: conflictRows.length
+    });
+    conflictStatus.className = ready ? 'ready' : 'warning';
+    fileStatus.textContent = !markerFree
+      ? tr('Conflict markers remain')
+      : ready
+        ? tr('Result is ready to apply')
+        : tr('Resolve every highlighted block');
+    fileStatus.className = ready ? 'ready' : 'warning';
+    document.getElementById('previousButton').disabled = conflictRows.length < 2;
+    document.getElementById('nextButton').disabled = conflictRows.length < 2;
+  }
+
+  function rerenderHighlights() {
+    document.querySelectorAll('pre.code').forEach((pre) => {
+      renderCode(
+        pre,
+        pre.dataset.text || '',
+        pre.dataset.other || '',
+        pre.dataset.conflict === 'true'
+      );
+    });
+  }
+
+  document.getElementById('acceptAllCurrentButton').addEventListener('click', () => acceptAll('current'));
+  document.getElementById('acceptAllBothButton').addEventListener('click', () => acceptAll('both'));
+  document.getElementById('acceptAllIncomingButton').addEventListener('click', () => acceptAll('incoming'));
+  document.getElementById('previousButton').addEventListener('click', () => navigateConflict(-1));
+  document.getElementById('nextButton').addEventListener('click', () => navigateConflict(1));
+  document.getElementById('ignoreMode').addEventListener('change', (event) => {
+    ignoreMode = event.target.value;
+    rerenderHighlights();
+  });
+  document.getElementById('highlightMode').addEventListener('change', (event) => {
+    highlightMode = event.target.value;
+    rerenderHighlights();
+  });
+  document.getElementById('detailsButton').addEventListener('click', () => {
+    const panel = document.getElementById('basePanel');
+    const visible = panel.classList.toggle('visible');
+    document.getElementById('detailsButton').textContent = visible ? tr('Hide Details') : tr('Details');
+  });
+  document.getElementById('nativeButton').addEventListener('click', () => {
+    vscodeApi.postMessage({ type: 'openNative' });
+  });
   document.getElementById('cancelButton').addEventListener('click', () => {
     vscodeApi.postMessage({ type: 'cancel' });
   });
+  saveButton.addEventListener('click', () => {
+    const result = assembleResult();
+    if (!saveButton.disabled && !containsConflictMarkers(result)) {
+      saveButton.disabled = true;
+      vscodeApi.postMessage({ type: 'save', content: result, deleteFile: deleteResult });
+    }
+  });
 
-  renderSegments();
-  rebuildResult();
+  buildGrid();
   `;
 }
