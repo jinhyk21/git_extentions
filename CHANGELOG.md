@@ -4,6 +4,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- Redesigned sidebar (WebviewView): one card per repository with branch and sync badges, change counts, one-click Resolve / Pull / Push, hover quick actions (Fetch, History, Run Command, more), operation banner with Continue / Skip / Abort, inline commit box, collapsible file groups, multi-select stage/unstage, search, right-click menu, keyboard navigation, and animations that respect reduced-motion. The native tree is still available with `gitWorkspacePro.sidebar.mode = "classic"`.
+- Status bar entry for the active file's repository (branch, sync, warning on conflicts/operations); click for quick actions.
+- Commands and keybindings: Fetch All (`Ctrl+Alt+G F`), Quick Actions (`Ctrl+Alt+G`), Search Repositories (`Ctrl+Alt+Shift+G`); setting `sidebar.showCleanRepositories`.
+- History: search (message, author, hash, branch) with highlighting, author avatars, relative dates, copy hash, Load more, keyboard navigation.
+- Run Command: ANSI colors, live timer, status pill, follow-output toggle, copy output, recent-command chips.
+- Commit details: author header, change bars per file, file filter.
+
+### Changed
+- After file actions and Git operations only the affected repository (and its parents) is refreshed instead of rescanning the workspace; git status loads run at most 4 at a time.
+- Conflict editor: motion, focus rings and depth polish (layout and behavior unchanged).
+
 ## [0.4.0] - 2026-10-14
 
 ### Added

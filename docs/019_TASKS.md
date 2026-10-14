@@ -88,6 +88,15 @@
 - Done: `ShellCommandRunner` (temp script file, process-tree kill, output cap, timeout) separate from `GitProcessRunner`.
 - Pending: "Run in integrated terminal" button for interactive commands.
 
+## Milestone 9: UI Redesign
+
+- Done: Card-based sidebar WebviewView with quick actions, inline commit, multi-select, search, keyboard navigation, context menu, animations (classic tree kept behind `sidebar.mode`).
+- Done: Status bar entry, Fetch All, Quick Actions, keybindings.
+- Done: History search/avatars/relative dates/Load more; Run Command ANSI output; Commit details redesign; conflict editor polish.
+- Done: Targeted per-repository refresh and bounded git concurrency.
+- Done: Headless-Chrome QA (`npm run qa:ui`) for sidebar, history, run command and commit details.
+- Pending: Verify the new sidebar by hand across light, dark and high-contrast themes.
+
 ## Cross-cutting: Quality & CI
 
 - Done: Smoke tests inside a real VS Code host via `@vscode/test-electron` (`npm run test:vscode`), run in CI (Xvfb on Linux).
