@@ -12,6 +12,8 @@ import { shouldShowRepository } from "./repositoryVisibility";
 import { CustomCommandPanel } from "./webview/CustomCommandPanel";
 import { ConflictResolutionPanel } from "./webview/ConflictResolutionPanel";
 import { HistoryPanel } from "./webview/HistoryPanel";
+import { SIDEBAR_VIEW_ID, SidebarProvider } from "./sidebar/SidebarProvider";
+import { RepositoryStatusBar } from "./sidebar/RepositoryStatusBar";
 
 export function activate(context: vscode.ExtensionContext): void {
   const repositoryManager = new RepositoryManager();
@@ -19,10 +21,28 @@ export function activate(context: vscode.ExtensionContext): void {
   const debugOutput = vscode.window.createOutputChannel("Git Workspace Pro (Debug)");
   context.subscriptions.push(debugOutput);
 
-  context.subscriptions.push(vscode.window.registerTreeDataProvider("gitWorkspacePro.repositories", treeProvider));
-  registerCommands(context, repositoryManager, () => treeProvider.refresh());
+  const sidebar = new SidebarProvider(context.extensionUri, repositoryManager);
+  const statusBar = new RepositoryStatusBar(repositoryManager);
+  const refreshViews = () => {
+    treeProvider.refresh();
+    sidebar.refresh();
+    statusBar.update();
+  };
+
   context.subscriptions.push(
+    vscode.window.registerTreeDataProvider("gitWorkspacePro.repositories", treeProvider),
+    vscode.window.registerWebviewViewProvider(SIDEBAR_VIEW_ID, sidebar, {
+      webviewOptions: { retainContextWhenHidden: true }
+    }),
+    statusBar
+  );
+  registerCommands(context, repositoryManager, refreshViews, { focusSidebarSearch: () => sidebar.focusSearch() });
+  context.subscriptions.push(
+    vscode.window.onDidChangeActiveTextEditor(() => statusBar.update()),
     vscode.workspace.onDidChangeConfiguration((event) => {
+      if (event.affectsConfiguration("gitWorkspacePro.sidebar.showCleanRepositories")) {
+        sidebar.refresh();
+      }
       if (
         event.affectsConfiguration("gitWorkspacePro.scan.excludeDirectories") ||
         event.affectsConfiguration("gitWorkspacePro.scan.maxDepth")
@@ -32,6 +52,8 @@ export function activate(context: vscode.ExtensionContext): void {
       }
       if (event.affectsConfiguration("gitWorkspacePro.language")) {
         treeProvider.refresh();
+        sidebar.reload();
+        statusBar.update();
         ConflictResolutionPanel.refreshOpenPanels();
         HistoryPanel.refreshOpenPanels();
       }
@@ -51,7 +73,7 @@ export function activate(context: vscode.ExtensionContext): void {
     const folders = vscode.workspace.workspaceFolders?.map((folder) => folder.uri.fsPath) ?? [];
     return repositoryManager.refresh(folders).then(() => {
       dumpRepositoryTreeForDebug(repositoryManager.getRepositories(), debugOutput);
-      treeProvider.refresh();
+      refreshViews();
     });
   };
 
@@ -70,7 +92,7 @@ export function activate(context: vscode.ExtensionContext): void {
       repositoryRootPath,
       setTimeout(() => {
         pendingStatusRefreshes.delete(repositoryRootPath);
-        void repositoryManager.refreshRepositoryStatus(repositoryRootPath).then(() => treeProvider.refresh());
+        void repositoryManager.refreshRepositoryStatus(repositoryRootPath).then(() => refreshViews());
       }, 400)
     );
   };

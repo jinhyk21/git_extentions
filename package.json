@@ -47,8 +47,15 @@
     "views": {
       "gitWorkspacePro": [
         {
+          "id": "gitWorkspacePro.dashboard",
+          "name": "%view.repositories%",
+          "type": "webview",
+          "when": "config.gitWorkspacePro.sidebar.mode != 'classic'"
+        },
+        {
           "id": "gitWorkspacePro.repositories",
-          "name": "%view.repositories%"
+          "name": "%view.repositories%",
+          "when": "config.gitWorkspacePro.sidebar.mode == 'classic'"
         }
       ]
     },
@@ -194,6 +201,25 @@
         "icon": "$(terminal)"
       },
       {
+        "command": "gitWorkspacePro.fetchAll",
+        "title": "%command.fetchAll%",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "gitWorkspacePro.quickActions",
+        "title": "%command.quickActions%",
+        "icon": "$(git-branch)"
+      },
+      {
+        "command": "gitWorkspacePro.focusSearch",
+        "title": "%command.focusSearch%",
+        "icon": "$(search)"
+      },
+      {
+        "command": "gitWorkspacePro.commitWithMessage",
+        "title": "%command.commitWithMessage%"
+      },
+      {
         "command": "gitWorkspacePro.changeLanguage",
         "title": "%command.changeLanguage%",
         "icon": "$(globe)"
@@ -218,6 +244,21 @@
           ],
           "default": "auto",
           "markdownDescription": "%config.language.description%"
+        },
+        "gitWorkspacePro.sidebar.mode": {
+          "type": "string",
+          "enum": ["modern", "classic"],
+          "enumDescriptions": [
+            "%config.sidebar.mode.modern%",
+            "%config.sidebar.mode.classic%"
+          ],
+          "default": "modern",
+          "description": "%config.sidebar.mode%"
+        },
+        "gitWorkspacePro.sidebar.showCleanRepositories": {
+          "type": "boolean",
+          "default": false,
+          "description": "%config.sidebar.showCleanRepositories%"
         },
         "gitWorkspacePro.pullStrategy": {
           "type": "string",
@@ -282,6 +323,23 @@
         }
       }
     },
+    "keybindings": [
+      {
+        "command": "gitWorkspacePro.quickActions",
+        "key": "ctrl+alt+g",
+        "mac": "cmd+alt+g"
+      },
+      {
+        "command": "gitWorkspacePro.focusSearch",
+        "key": "ctrl+alt+shift+g",
+        "mac": "cmd+alt+shift+g"
+      },
+      {
+        "command": "gitWorkspacePro.fetchAll",
+        "key": "ctrl+alt+g f",
+        "mac": "cmd+alt+g f"
+      }
+    ],
     "menus": {
       "view/item/context": [
         {
@@ -346,6 +404,16 @@
         }
       ],
       "view/title": [
+        {
+          "command": "gitWorkspacePro.fetchAll",
+          "when": "view == gitWorkspacePro.dashboard",
+          "group": "navigation@1"
+        },
+        {
+          "command": "gitWorkspacePro.refreshRepositories",
+          "when": "view == gitWorkspacePro.dashboard",
+          "group": "navigation@2"
+        },
         {
           "command": "gitWorkspacePro.refreshRepositories",
           "when": "view == gitWorkspacePro.repositories",
@@ -440,6 +508,10 @@
         {
           "command": "gitWorkspacePro.showHistory",
           "when": "false"
+        },
+        {
+          "command": "gitWorkspacePro.commitWithMessage",
+          "when": "false"
         }
       ]
     }
@@ -453,7 +525,7 @@
     "test": "npm run compile && npm run lint && npm run test:unit",
     "test:vscode": "npm run compile && npm run pretest:unit && node out-test/test/vscode/runTest.js",
     "qa:smoke": "npm test",
-    "qa:ui": "npm run pretest:unit && mocha --grep \"\\\\[UI/UX\\\\]\" && node scripts/qa-render-ui.js",
+    "qa:ui": "npm run pretest:unit && mocha --grep \"\\\\[UI/UX\\\\]\" && node scripts/qa-render-ui.js && node scripts/qa-render-sidebar.js",
     "qa:performance": "npm run compile && node scripts/qa-performance.js",
     "qa:all": "npm run qa:smoke && npm run qa:ui && npm run qa:performance",
     "qa:create-conflict": "node scripts/create-conflict-fixture.js"

@@ -31,6 +31,12 @@ describe("Git Workspace Pro (VS Code host smoke)", () => {
     await vscode.commands.executeCommand("gitWorkspacePro.refreshRepositories");
   });
 
+  it("opens the sidebar, focuses its search and fetches all repositories", async () => {
+    await vscode.commands.executeCommand("workbench.view.extension.gitWorkspacePro");
+    await vscode.commands.executeCommand("gitWorkspacePro.focusSearch");
+    await vscode.commands.executeCommand("gitWorkspacePro.fetchAll");
+  });
+
   it("opens the Run Command panel for a repository", async () => {
     const workspace = process.env.GWP_TEST_WORKSPACE;
     assert.ok(workspace);

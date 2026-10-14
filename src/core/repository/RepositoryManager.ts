@@ -7,11 +7,13 @@ import type {
 } from "../../shared/types/repository";
 import type { CommitDetails, CommitLogEntry } from "../../shared/types/history";
 import { GitAdapter } from "../git/GitAdapter";
+import { createLimiter } from "../util/createLimiter";
 import { RepositoryScanner, type ScanOptions } from "./RepositoryScanner";
 
 export class RepositoryManager {
   private repositories: readonly RepositoryNode[] = [];
   private scanOptions: ScanOptions = {};
+  private readonly limitStatusLoad = createLimiter(4);
 
   public constructor(
     private readonly scanner = new RepositoryScanner(),
@@ -43,6 +45,18 @@ export class RepositoryManager {
     this.repositories = this.repositories.map((repository) =>
       this.applyStatus(repository, repositoryPath, status, statusError)
     );
+  }
+
+  /**
+   * Refreshes one repository plus every repository that contains it (a nested
+   * repository shows up as a change in its parent), without rescanning the
+   * filesystem or touching unrelated repositories.
+   */
+  public async refreshRepositoryAndAncestors(repositoryPath: string): Promise<void> {
+    const targets = this.flatten(this.repositories)
+      .map((repository) => repository.rootPath)
+      .filter((root) => repositoryPath === root || repositoryPath.startsWith(`${root}${path.sep}`));
+    await Promise.all((targets.length > 0 ? targets : [repositoryPath]).map((root) => this.refreshRepositoryStatus(root)));
   }
 
   private applyStatus(
@@ -249,7 +263,7 @@ export class RepositoryManager {
       return {
         ...repository,
         children,
-        status: await this.gitAdapter.getStatus(repository.rootPath),
+        status: await this.limitStatusLoad(() => this.gitAdapter.getStatus(repository.rootPath)),
         statusError: undefined
       };
     } catch (error) {

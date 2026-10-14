@@ -46,5 +46,13 @@
   "config.pullStrategy.merge": "Create a merge commit.",
   "config.history.maxCount": "Maximum number of commits loaded in the History panel.",
   "config.scan.excludeDirectories": "Extra directory names to skip when scanning for repositories (for example vendor, .venv, target). Built-in: .git, node_modules, dist, out, .next, .turbo.",
-  "config.scan.maxDepth": "Maximum folder depth to scan for repositories below each workspace folder (0 = unlimited)."
+  "config.scan.maxDepth": "Maximum folder depth to scan for repositories below each workspace folder (0 = unlimited).",
+  "command.fetchAll": "Git Workspace Pro: Fetch All Repositories",
+  "command.quickActions": "Git Workspace Pro: Quick Actions for Current Repository",
+  "command.focusSearch": "Git Workspace Pro: Search Repositories",
+  "command.commitWithMessage": "Git Workspace Pro: Commit With Message",
+  "config.sidebar.mode": "Sidebar style. 'modern' is the card-based view; 'classic' is the native VS Code tree.",
+  "config.sidebar.mode.modern": "Card-based sidebar with quick actions, search, and animations.",
+  "config.sidebar.mode.classic": "Native VS Code tree view.",
+  "config.sidebar.showCleanRepositories": "Also list repositories that are clean and in sync in the modern sidebar."
 }
