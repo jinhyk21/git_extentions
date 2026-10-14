@@ -270,7 +270,13 @@ const vi: Record<string, string> = {
   "Fetch All": "Fetch tất cả",
   "Collapse All": "Thu gọn tất cả",
   "Fetch failed for {count} repositories: {details}": "Fetch thất bại ở {count} kho: {details}",
-  "Fetched {count} repositories.": "Đã fetch {count} kho."
+  "Fetched {count} repositories.": "Đã fetch {count} kho.",
+  "Search commits (message, author, hash, branch)…": "Tìm commit (nội dung, tác giả, hash, nhánh)…",
+  "Load more commits": "Tải thêm commit",
+  "{count} commits": "{count} commit",
+  "{shown} of {count} commits": "{shown}/{count} commit",
+  "Copied {hash}": "Đã sao chép {hash}",
+  "No matching commits.": "Không có commit phù hợp."
 };
 
 const zhCn: Record<string, string> = {
@@ -541,7 +547,13 @@ const zhCn: Record<string, string> = {
   "Fetch All": "全部抓取",
   "Collapse All": "全部折叠",
   "Fetch failed for {count} repositories: {details}": "{count} 个仓库抓取失败：{details}",
-  "Fetched {count} repositories.": "已抓取 {count} 个仓库。"
+  "Fetched {count} repositories.": "已抓取 {count} 个仓库。",
+  "Search commits (message, author, hash, branch)…": "搜索提交（消息、作者、哈希、分支）…",
+  "Load more commits": "加载更多提交",
+  "{count} commits": "{count} 个提交",
+  "{shown} of {count} commits": "{shown}/{count} 个提交",
+  "Copied {hash}": "已复制 {hash}",
+  "No matching commits.": "没有匹配的提交。"
 };
 
 export function resolveLanguage(preference: LanguagePreference, vscodeLanguage: string): AppLanguage {
