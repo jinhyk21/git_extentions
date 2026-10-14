@@ -525,7 +525,7 @@
     "test": "npm run compile && npm run lint && npm run test:unit",
     "test:vscode": "npm run compile && npm run pretest:unit && node out-test/test/vscode/runTest.js",
     "qa:smoke": "npm test",
-    "qa:ui": "npm run pretest:unit && mocha --grep \"\\\\[UI/UX\\\\]\" && node scripts/qa-render-ui.js && node scripts/qa-render-sidebar.js && node scripts/qa-render-history.js",
+    "qa:ui": "npm run pretest:unit && mocha --grep \"\\\\[UI/UX\\\\]\" && node scripts/qa-render-ui.js && node scripts/qa-render-sidebar.js && node scripts/qa-render-history.js && node scripts/qa-render-panels.js",
     "qa:performance": "npm run compile && node scripts/qa-performance.js",
     "qa:all": "npm run qa:smoke && npm run qa:ui && npm run qa:performance",
     "qa:create-conflict": "node scripts/create-conflict-fixture.js"

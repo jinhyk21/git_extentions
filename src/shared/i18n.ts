@@ -276,7 +276,16 @@ const vi: Record<string, string> = {
   "{count} commits": "{count} commit",
   "{shown} of {count} commits": "{shown}/{count} commit",
   "Copied {hash}": "Đã sao chép {hash}",
-  "No matching commits.": "Không có commit phù hợp."
+  "No matching commits.": "Không có commit phù hợp.",
+  "Copy output": "Sao chép output",
+  "Follow output": "Tự cuộn theo output",
+  "Show all": "Hiện tất cả",
+  "Show fewer": "Thu gọn",
+  "Ready": "Sẵn sàng",
+  "Press Ctrl+Enter to run": "Nhấn Ctrl+Enter để chạy",
+  "{count} lines": "{count} dòng",
+  "Output copied.": "Đã sao chép output.",
+  "Filter files…": "Lọc tệp…"
 };
 
 const zhCn: Record<string, string> = {
@@ -553,7 +562,16 @@ const zhCn: Record<string, string> = {
   "{count} commits": "{count} 个提交",
   "{shown} of {count} commits": "{shown}/{count} 个提交",
   "Copied {hash}": "已复制 {hash}",
-  "No matching commits.": "没有匹配的提交。"
+  "No matching commits.": "没有匹配的提交。",
+  "Copy output": "复制输出",
+  "Follow output": "跟随输出",
+  "Show all": "显示全部",
+  "Show fewer": "收起",
+  "Ready": "就绪",
+  "Press Ctrl+Enter to run": "按 Ctrl+Enter 运行",
+  "{count} lines": "{count} 行",
+  "Output copied.": "已复制输出。",
+  "Filter files…": "筛选文件…"
 };
 
 export function resolveLanguage(preference: LanguagePreference, vscodeLanguage: string): AppLanguage {

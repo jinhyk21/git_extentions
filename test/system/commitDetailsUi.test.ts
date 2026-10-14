@@ -43,6 +43,6 @@ describe("[UI/UX] commit details webview", () => {
   });
 
   it("renders Vietnamese labels", () => {
-    assert.match(getCommitDetailsHtml(webview, "repo", details, "vi"), /Tác giả/);
+    assert.match(getCommitDetailsHtml(webview, "repo", details, "vi"), /Sao chép hash/);
   });
 });

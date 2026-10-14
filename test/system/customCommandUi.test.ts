@@ -1,6 +1,7 @@
 import * as assert from "node:assert";
 import type { Webview } from "vscode";
-import { getCustomCommandHtml } from "../../src/extension/webview/customCommandTemplate";
+import { translate } from "../../src/shared/i18n";
+import { CUSTOM_COMMAND_MESSAGES, getCustomCommandHtml } from "../../src/extension/webview/customCommandTemplate";
 
 describe("[UI/UX] custom command webview", () => {
   const webview = { cspSource: "vscode-webview://qa-test" } as Webview;
@@ -28,5 +29,12 @@ describe("[UI/UX] custom command webview", () => {
 
   it("renders Vietnamese labels", () => {
     assert.match(getCustomCommandHtml(webview, "repo", [], true, "vi"), /Chạy/);
+  });
+
+  it("has Vietnamese and Chinese translations for every string", () => {
+    for (const language of ["vi", "zh-cn"] as const) {
+      const missing = CUSTOM_COMMAND_MESSAGES.filter((message) => translate(language, message) === message);
+      assert.deepStrictEqual(missing, [], `${language} is missing translations`);
+    }
   });
 });
