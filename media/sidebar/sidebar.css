@@ -8,8 +8,14 @@
   --gwp-added: var(--vscode-gitDecoration-addedResourceForeground, #3fb950);
   --gwp-untracked: var(--vscode-gitDecoration-untrackedResourceForeground, #58a6ff);
   --gwp-muted: var(--vscode-descriptionForeground);
-  --gwp-card: color-mix(in srgb, var(--vscode-sideBar-background) 88%, var(--vscode-foreground) 12%);
-  --gwp-card-hover: color-mix(in srgb, var(--vscode-sideBar-background) 80%, var(--vscode-foreground) 20%);
+  /* Every surface is derived from the sidebar background and foreground only (with fallbacks),
+     so a theme's toolbar/icon/list colors can never turn rows or icons into low-contrast patches. */
+  --gwp-bg: var(--vscode-sideBar-background, var(--vscode-editor-background, #1e1e1e));
+  --gwp-fg: var(--vscode-foreground, #cccccc);
+  --gwp-card: color-mix(in srgb, var(--gwp-bg) 88%, var(--gwp-fg) 12%);
+  --gwp-card-hover: color-mix(in srgb, var(--gwp-bg) 80%, var(--gwp-fg) 20%);
+  --gwp-hit: color-mix(in srgb, var(--gwp-fg) 18%, transparent);
+  --gwp-hit-active: color-mix(in srgb, var(--gwp-fg) 28%, transparent);
   --gwp-border: var(--vscode-widget-border, var(--vscode-panel-border, rgba(128, 128, 128, 0.25)));
 }
 
@@ -86,13 +92,13 @@ header.top {
   width: 28px;
   height: 28px;
   border-radius: var(--gwp-radius);
-  color: var(--vscode-icon-foreground, currentColor);
+  color: var(--gwp-fg);
   transition: background var(--gwp-dur), transform 90ms;
 }
-.icon-btn:hover { background: var(--vscode-toolbar-hoverBackground, rgba(128, 128, 128, 0.2)); }
-.icon-btn:active { transform: scale(0.9); }
+.icon-btn:hover { background: var(--gwp-hit); }
+.icon-btn:active { transform: scale(0.9); background: var(--gwp-hit-active); }
 .icon-btn:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: 1px; }
-.icon-btn.active { background: var(--vscode-toolbar-activeBackground, rgba(128, 128, 128, 0.3)); }
+.icon-btn.active { background: var(--gwp-hit-active); }
 .icon-btn:disabled { opacity: 0.4; cursor: default; }
 .spin svg { animation: gwp-spin 800ms linear infinite; }
 
@@ -181,8 +187,8 @@ header.top {
 .quick {
   display: flex; align-items: center; gap: 0; opacity: 0; pointer-events: none;
   position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
-  padding: 0 2px 0 14px; border-radius: var(--gwp-radius);
-  background: linear-gradient(90deg, transparent, var(--gwp-card-hover) 14px);
+  padding: 0 2px 0 12px; border-radius: var(--gwp-radius);
+  background: linear-gradient(90deg, transparent, var(--gwp-card-hover) 12px);
   transition: opacity var(--gwp-dur);
 }
 .card-head:hover > .quick, .card-head:focus-within > .quick { opacity: 1; pointer-events: auto; }
@@ -250,8 +256,6 @@ header.top {
 .file .fname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .file .fdir { color: var(--gwp-muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; }
 .file:hover > .quick, .file:focus-within > .quick, .group-head:hover > .quick, .group-head:focus-within > .quick { opacity: 1; pointer-events: auto; }
-.group-head > .quick { background: linear-gradient(90deg, transparent, var(--gwp-card-hover) 14px); }
-.file > .quick { background: linear-gradient(90deg, transparent, var(--gwp-card-hover) 14px); }
 
 .more-btn { align-self: flex-start; margin: 2px 8px; font-size: 11px; color: var(--vscode-textLink-foreground); }
 .more-btn:hover { text-decoration: underline; }
