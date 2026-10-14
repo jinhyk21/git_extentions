@@ -33,7 +33,7 @@ const scenario = `window.addEventListener("load", () => setTimeout(() => {
   window.postMessage({ type: "finished", exitCode: 1, durationMs: 4200, stopped: false, timedOut: false }, "*");
   window.postMessage({ type: "history", items: ["npm test", "git log --oneline\\ngit status", "docker compose up -d", "npm run build"] }, "*");
 }, 200));`;
-let html = getCustomCommandHtml({ cspSource: "qa" }, "api-service", ["npm test"], true, "en").replace("</body>", `<script>${scenario}</script></body>`);
+let html = getCustomCommandHtml({ cspSource: "qa" }, "api-service", ["npm test"], true, "en", "/home/dev/work/temis/apps/api-service").replace("</body>", `<script>${scenario}</script></body>`);
 const ok1 = shoot("run-command", strip(html), "900,640");
 
 const details = {

@@ -23,7 +23,8 @@ export const CUSTOM_COMMAND_MESSAGES = [
   "Show fewer",
   "Ready",
   "Press Ctrl+Enter to run",
-  "{count} lines"
+  "{count} lines",
+  "Runs in"
 ] as const;
 
 export function getCustomCommandHtml(
@@ -31,14 +32,15 @@ export function getCustomCommandHtml(
   repositoryName: string,
   history: readonly string[],
   autoRefresh: boolean,
-  language: AppLanguage = "en"
+  language: AppLanguage = "en",
+  repositoryPath = ""
 ): string {
   const nonce = createNonce();
   const translations = Object.fromEntries(
     CUSTOM_COMMAND_MESSAGES.map((message) => [message, translate(language, message)])
   );
   // Escape "<" so repository/history content can never close the script tag.
-  const data = JSON.stringify({ repositoryName, history, autoRefresh, translations }).replace(/</g, "\\u003c");
+  const data = JSON.stringify({ repositoryName, repositoryPath, history, autoRefresh, translations }).replace(/</g, "\\u003c");
 
   return `<!DOCTYPE html>
 <html lang="${language}">
@@ -61,6 +63,9 @@ export function getCustomCommandHtml(
   body { font-family: var(--vscode-font-family, sans-serif); color: var(--vscode-foreground); background: var(--vscode-editor-background); margin: 0; padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; height: 100vh; }
   header { display: flex; align-items: center; gap: 10px; }
   h1 { font-size: 15px; margin: 0; font-weight: 600; }
+  .where { font-size: 12px; color: var(--muted); display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; margin-top: -6px; }
+  .where[hidden] { display: none; }
+  .where code { font-family: var(--mono); color: var(--vscode-foreground); word-break: break-all; user-select: text; }
   .repo-chip { font-size: 11px; padding: 2px 10px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); }
   .card { border: 1px solid var(--border); border-radius: 10px; padding: 10px; display: flex; flex-direction: column; gap: 8px; background: color-mix(in srgb, var(--vscode-editor-background) 92%, var(--vscode-foreground) 8%); transition: border-color 160ms; }
   .card:focus-within { border-color: var(--vscode-focusBorder); }
@@ -115,6 +120,7 @@ export function getCustomCommandHtml(
   <h1 id="title"></h1>
   <span class="repo-chip" id="repoChip"></span>
 </header>
+<div class="where" id="where" hidden><span id="whereLabel"></span> <code id="wherePath"></code></div>
 <section class="card">
   <div>
     <label for="script" id="scriptLabel"></label>
@@ -160,6 +166,12 @@ export function getCustomCommandHtml(
 
   $("title").textContent = tr("Run Command");
   $("repoChip").textContent = data.repositoryName;
+  if (data.repositoryPath) {
+    $("where").hidden = false;
+    $("whereLabel").textContent = tr("Runs in");
+    $("wherePath").textContent = data.repositoryPath;
+    $("cwd").placeholder = data.repositoryPath;
+  }
   $("scriptLabel").textContent = tr("Command (multi-line supported, Ctrl+Enter to run)");
   $("cwdLabel").textContent = tr("Working directory (relative to repository, optional)");
   $("autoRefreshLabel").textContent = tr("Refresh repositories after running");
