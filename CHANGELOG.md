@@ -4,6 +4,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-14
+
 ### Added
 - Redesigned sidebar (WebviewView): one card per repository with branch and sync badges, change counts, one-click Resolve / Pull / Push, hover quick actions (Fetch, History, Run Command, more), operation banner with Continue / Skip / Abort, inline commit box, collapsible file groups, multi-select stage/unstage, search, right-click menu, keyboard navigation, and animations that respect reduced-motion. The native tree is still available with `gitWorkspacePro.sidebar.mode = "classic"`.
 - Status bar entry for the active file's repository (branch, sync, warning on conflicts/operations); click for quick actions.

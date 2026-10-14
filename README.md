@@ -67,7 +67,7 @@ Lưu ý: lệnh chạy không có terminal thật nên không nhập tương tá
 
 ### Cách 1: Cài từ file VSIX
 
-1. Tải file `git-workspace-pro-0.4.0.vsix` từ [Releases](https://github.com/jinhyk21/git_extentions/releases)
+1. Tải file `git-workspace-pro-0.5.0.vsix` từ [Releases](https://github.com/jinhyk21/git_extentions/releases)
 2. Mở VS Code
 3. Nhấn `Ctrl+Shift+P` (Windows/Linux) hoặc `Cmd+Shift+P` (macOS) để mở Command Palette
 4. Gõ `Extensions: Install from VSIX...` và chọn
@@ -77,7 +77,7 @@ Lưu ý: lệnh chạy không có terminal thật nên không nhập tương tá
 Hoặc cài bằng dòng lệnh:
 
 ```bash
-code --install-extension git-workspace-pro-0.4.0.vsix
+code --install-extension git-workspace-pro-0.5.0.vsix
 ```
 
 ### Cách 2: Build từ mã nguồn
@@ -111,7 +111,7 @@ vsce package --allow-missing-repository
 5. Cài file VSIX:
 
 ```bash
-code --install-extension git-workspace-pro-0.4.0.vsix
+code --install-extension git-workspace-pro-0.5.0.vsix
 ```
 
 ## Cách sử dụng
