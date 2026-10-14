@@ -10,9 +10,33 @@ import { shouldShowRepository } from "../repositoryVisibility";
  */
 export function buildSidebarState(repositories: readonly RepositoryNode[], showClean: boolean): SidebarState {
   const visible = showClean ? repositories : repositories.filter(shouldShowRepository);
-  const converted = visible.map((repository) => convert(repository, showClean));
+  const converted = sortByAttention(visible.map((repository) => convert(repository, showClean)));
 
-  return { repositories: converted, summary: summarize(converted), showClean };
+  return { repositories: converted, summary: summarize(converted), showClean, cleanCount: countClean(repositories) };
+}
+
+/** Most urgent first (conflicts, errors, changes, sync), clean last; alphabetical within a rank. */
+function attentionRank(repository: SidebarRepository): number {
+  if (repository.counts.conflicted > 0 || repository.operation) return 0;
+  if (repository.error) return 1;
+  if (repository.counts.staged + repository.counts.unstaged + repository.counts.untracked > 0) return 2;
+  if (repository.ahead > 0 || repository.behind > 0) return 3;
+  if (repository.loading) return 4;
+  return repository.needsAttention ? 4 : 5;
+}
+
+function sortByAttention(repositories: readonly SidebarRepository[]): SidebarRepository[] {
+  return [...repositories].sort(
+    (left, right) => attentionRank(left) - attentionRank(right) || left.name.localeCompare(right.name)
+  );
+}
+
+function countClean(repositories: readonly RepositoryNode[]): number {
+  return repositories.reduce(
+    (total, repository) =>
+      total + (repository.status && !shouldShowRepository({ ...repository, children: [] }) ? 1 : 0) + countClean(repository.children),
+    0
+  );
 }
 
 function convert(repository: RepositoryNode, showClean: boolean): SidebarRepository {
@@ -47,7 +71,7 @@ function convert(repository: RepositoryNode, showClean: boolean): SidebarReposit
       kind: file.kind,
       code: `${file.indexStatus}${file.workTreeStatus}`
     })),
-    children,
+    children: sortByAttention(children),
     needsAttention: shouldShowRepository(repository)
   };
 }

@@ -285,7 +285,9 @@ const vi: Record<string, string> = {
   "Press Ctrl+Enter to run": "Nhấn Ctrl+Enter để chạy",
   "{count} lines": "{count} dòng",
   "Output copied.": "Đã sao chép output.",
-  "Filter files…": "Lọc tệp…"
+  "Filter files…": "Lọc tệp…",
+  "{count} clean": "{count} sạch",
+  "Clean repositories ({count})": "Kho sạch ({count})"
 };
 
 const zhCn: Record<string, string> = {
@@ -571,7 +573,9 @@ const zhCn: Record<string, string> = {
   "Press Ctrl+Enter to run": "按 Ctrl+Enter 运行",
   "{count} lines": "{count} 行",
   "Output copied.": "已复制输出。",
-  "Filter files…": "筛选文件…"
+  "Filter files…": "筛选文件…",
+  "{count} clean": "{count} 个干净",
+  "Clean repositories ({count})": "干净仓库（{count}）"
 };
 
 export function resolveLanguage(preference: LanguagePreference, vscodeLanguage: string): AppLanguage {

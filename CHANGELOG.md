@@ -4,6 +4,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+- Sidebar: tighter spacing, larger icons and buttons, and hover actions that overlay the row instead of squeezing the repository name.
+- Sidebar ordering: repositories with conflicts or an operation first, then changes, then ahead/behind, clean last. Clean repositories are compact, dimmed rows under a "Clean repositories" label, and only show their branch when it differs from the most common one.
+- The "show clean repositories" control is now a labelled chip with the number of clean repositories.
+
 ## [0.5.0] - 2026-10-14
 
 ### Added

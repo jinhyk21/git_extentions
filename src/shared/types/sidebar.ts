@@ -49,4 +49,6 @@ export type SidebarState = {
   readonly repositories: readonly SidebarRepository[];
   readonly summary: SidebarSummary;
   readonly showClean: boolean;
+  /** Repositories that are clean and in sync, whether or not they are currently listed. */
+  readonly cleanCount: number;
 };

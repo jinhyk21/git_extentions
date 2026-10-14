@@ -14,8 +14,9 @@ const file = (p, kind, code) => ({ path: p, kind, code });
 const manyFiles = Array.from({ length: 180 }, (_, i) => file(`src/generated/file-${i}.ts`, "unstaged", " M"));
 
 const state = {
-  showClean: false,
-  summary: { repositories: 5, changedFiles: 190, conflicts: 2, ahead: 3, behind: 2 },
+  showClean: true,
+  cleanCount: 8,
+  summary: { repositories: 13, changedFiles: 190, conflicts: 2, ahead: 3, behind: 2 },
   repositories: [
     {
       id: "/w/api", name: "api-service", rootPath: "/w/api", isSubmodule: false, loading: false, branch: "feature/payments", ahead: 2, behind: 0,
@@ -35,6 +36,10 @@ const state = {
       counts: counts(0, 180, 0, 0), files: manyFiles, children: [], needsAttention: true
     },
     { id: "/w/new", name: "loading-repo", rootPath: "/w/new", isSubmodule: false, loading: true, ahead: 0, behind: 0, counts: counts(0, 0, 0, 0), files: [], children: [], needsAttention: true },
+    ...["lms-learning", "lms-schedule", "zoom-meeting", "shared", "ims-declaration", "license", "criteria", "lms-exam"].map((name, i) => ({
+      id: "/w/" + name, name, rootPath: "/w/" + name, isSubmodule: false, loading: false, branch: i === 5 ? "release/2.0" : "dev", ahead: 0, behind: 0,
+      counts: counts(0, 0, 0, 0), files: [], children: [], needsAttention: false
+    })),
     { id: "/w/bad", name: "broken-repo", rootPath: "/w/bad", isSubmodule: false, loading: false, error: "fatal: not a git repository", ahead: 0, behind: 0, counts: counts(0, 0, 0, 0), files: [], children: [], needsAttention: true }
   ]
 };
@@ -82,6 +87,8 @@ function main() {
       out.cards = $$(".card").length;
       out.chips = document.querySelectorAll("#summary .chip").length;
       out.error = document.documentElement.getAttribute("data-error");
+      out.compact = $$(".card.compact").length;
+      out.sectionLabel = !!document.querySelector(".section-label");
       // expand a collapsed card by clicking its header
       const head = $$(".card-head").find((h) => h.textContent.includes("monorepo"));
       head.click();
@@ -117,13 +124,14 @@ function main() {
   } else {
     const out = JSON.parse(match[1].replace(/&quot;/g, '"').replace(/&amp;/g, "&"));
     check("no script errors", !out.error, out.error);
-    check("renders one card per top-level and nested repository", out.cards === 6, `cards=${out.cards}`);
+    check("renders one card per top-level and nested repository", out.cards === 14, `cards=${out.cards}`);
     check("renders summary chips", out.chips >= 3, `chips=${out.chips}`);
     check("expands a card on click", out.expandedBody === true, "no group rendered");
     check("caps very large file groups", out.capped === true, "no 'show more' button");
     check("ctrl+click shows the selection bar", out.selectionBar === true, "bar hidden");
     check("bulk stage posts one command with both files", out.bulkStage === "[2]", out.bulkStage);
     check("search filters repositories", out.filtered === 1, `cards=${out.filtered}`);
+    check("clean repositories render compact under a section label", out.compact === 8 && out.sectionLabel === true, `compact=${out.compact} label=${out.sectionLabel}`);
     check("context menu lists repository actions", out.menu >= 8, `buttons=${out.menu}`);
   }
 

@@ -33,6 +33,7 @@
   let prevCounts = new Map();
   let prevSummary = null;
   let lastSignature = "";
+  let commonBranch = "";
 
   function persist() {
     vscode.setState({
@@ -184,6 +185,35 @@
   const cleanBtn = document.getElementById("toggleClean");
   const fetchAllBtn = document.getElementById("fetchAll");
 
+  /** The branch most repositories are on; clean rows only repeat it when they differ. */
+  function mostCommonBranch(repos) {
+    const counts = new Map();
+    const walk = (list) => list.forEach((repo) => {
+      if (repo.branch) counts.set(repo.branch, (counts.get(repo.branch) || 0) + 1);
+      walk(repo.children);
+    });
+    walk(repos);
+    let best = "";
+    let bestCount = 1;
+    for (const [branch, count] of counts) if (count > bestCount) { best = branch; bestCount = count; }
+    return best;
+  }
+
+  function renderRepoList(nodes, isChild, keys) {
+    const out = [];
+    const cleanNodes = nodes.filter((node) => !node.repo.needsAttention);
+    const split = cleanNodes.length > 0 && cleanNodes.length < nodes.length;
+    let labelled = false;
+    for (const node of nodes) {
+      if (split && !node.repo.needsAttention && !labelled) {
+        out.push(h("div", { class: "section-label", text: tr("Clean repositories ({count})", { count: cleanNodes.length }) }));
+        labelled = true;
+      }
+      out.push(renderRepo(node, isChild, keys));
+    }
+    return out;
+  }
+
   function renderSummary() {
     const s = state.summary;
     const chips = [];
@@ -207,17 +237,19 @@
     const typingState = typing ? { key: typing.dataset.draft, start: typing.selectionStart, end: typing.selectionEnd } : null;
 
     renderSummary();
+    cleanBtn.hidden = state.cleanCount === 0 && !state.showClean;
     cleanBtn.classList.toggle("active", state.showClean);
-    cleanBtn.replaceChildren(icon(state.showClean ? "eye" : "eyeOff"));
+    cleanBtn.replaceChildren(icon(state.showClean ? "eye" : "eyeOff"), tr("{count} clean", { count: state.cleanCount }));
     cleanBtn.title = state.showClean ? tr("Hide clean repositories") : tr("Show clean repositories");
     cleanBtn.setAttribute("aria-label", cleanBtn.title);
+    commonBranch = mostCommonBranch(state.repositories);
 
     const nextKeys = new Set();
     const nodes = applyFilter(state.repositories);
     if (nodes.length === 0) {
       listEl.replaceChildren(renderEmpty());
     } else {
-      listEl.replaceChildren(...nodes.map((node) => renderRepo(node, false, nextKeys)));
+      listEl.replaceChildren(...renderRepoList(nodes, false, nextKeys));
     }
 
     prevKeys = nextKeys;
@@ -263,8 +295,9 @@
     const open = ui.expanded.has(repo.id) || (ui.filter.trim() !== "" && node.forced);
     const stateClass = repoStateClass(repo);
     const changes = repo.counts.staged + repo.counts.unstaged + repo.counts.untracked + repo.counts.conflicted;
+    const compact = !repo.needsAttention;
     const card = h("div", {
-      class: "card" + (isChild ? " child" : "") + (open ? " open" : "") + (busy.has(repo.id) ? " busy" : "") + enterClass("repo:" + repo.id, keys),
+      class: "card" + (compact ? " compact" : "") + (isChild ? " child" : "") + (open ? " open" : "") + (busy.has(repo.id) ? " busy" : "") + enterClass("repo:" + repo.id, keys),
       data: { repo: repo.id }
     });
 
@@ -302,7 +335,7 @@
       h("span", { class: "chevron" }, icon("chevron")),
       h("span", { class: "dot " + stateClass, title: repo.loading ? tr("Loading…") : repo.error ? tr("Status unavailable") : "" }),
       h("span", { class: "name", text: repo.name }),
-      repo.branch ? h("span", { class: "branch", title: tr("Branch: {branch}", { branch: repo.branch }) }, icon("branch"), h("span", { class: "text", text: repo.branch })) : null,
+      repo.branch && !(compact && repo.branch === commonBranch) ? h("span", { class: "branch", title: tr("Branch: {branch}", { branch: repo.branch }) }, icon("branch"), h("span", { class: "text", text: repo.branch })) : null,
       sync.length ? h("span", { class: "sync-badge", text: sync.join(" ") }) : null,
       h("span", { class: "head-spacer" }),
       badges
@@ -372,7 +405,7 @@
       inner.append(renderGroup(repo, group, files, keys));
     }
 
-    for (const child of node.children) inner.append(renderRepo(child, true, keys));
+    inner.append(...renderRepoList(node.children, true, keys));
     body.append(inner);
   }
 

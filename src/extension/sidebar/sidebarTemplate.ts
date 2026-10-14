@@ -18,6 +18,8 @@ export const SIDEBAR_MESSAGES = [
   "{count} conflict",
   "{count} staged",
   "{count} selected",
+  "{count} clean",
+  "Clean repositories ({count})",
   "Hide clean repositories",
   "Show clean repositories",
   "No matches",
@@ -95,7 +97,7 @@ export function getSidebarHtml(
     <button class="icon-btn" id="fetchAll"></button>
     <button class="icon-btn" id="refresh"></button>
     <button class="icon-btn" id="collapseAll"></button>
-    <button class="icon-btn" id="toggleClean"></button>
+    <button class="chip-btn" id="toggleClean"></button>
   </div>
   <div class="search">
     <span id="searchIcon"></span>
