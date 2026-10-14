@@ -1,31 +1,52 @@
-import { existsSync } from "node:fs";
 import type { Dirent } from "node:fs";
-import { readdir } from "node:fs/promises";
+import { access, readdir } from "node:fs/promises";
 import path from "node:path";
 import type { RepositoryNode } from "../../shared/types/repository";
 
 const IGNORED_DIRECTORIES = new Set([".git", "node_modules", "dist", "out", ".next", ".turbo"]);
 
+export type ScanOptions = {
+  /** Extra directory names to skip, in addition to the built-in list. */
+  readonly excludeDirectories?: readonly string[];
+  /** Maximum directory depth below a workspace folder to scan; 0 or unset = unlimited. */
+  readonly maxDepth?: number;
+};
+
 export class RepositoryScanner {
-  public async scan(workspaceFolders: readonly string[]): Promise<readonly RepositoryNode[]> {
+  public async scan(
+    workspaceFolders: readonly string[],
+    options: ScanOptions = {}
+  ): Promise<readonly RepositoryNode[]> {
+    const ignored = new Set([...IGNORED_DIRECTORIES, ...(options.excludeDirectories ?? [])]);
+    const maxDepth = options.maxDepth && options.maxDepth > 0 ? options.maxDepth : Number.POSITIVE_INFINITY;
     const normalizedRoots = [...new Set(workspaceFolders.map((folder) => path.resolve(folder)))];
     const repositories: RepositoryDraft[] = [];
 
     for (const root of normalizedRoots) {
-      await this.scanDirectory(root, repositories);
+      await this.scanDirectory(root, repositories, ignored, maxDepth, 0);
     }
 
     return this.buildTree(repositories);
   }
 
-  private async scanDirectory(directory: string, repositories: RepositoryDraft[]): Promise<void> {
-    if (this.hasGitMetadata(directory)) {
+  private async scanDirectory(
+    directory: string,
+    repositories: RepositoryDraft[],
+    ignored: ReadonlySet<string>,
+    maxDepth: number,
+    depth: number
+  ): Promise<void> {
+    if (await this.pathExists(path.join(directory, ".git"))) {
       repositories.push({
         id: directory,
         name: path.basename(directory),
         rootPath: directory,
-        isSubmodule: existsSync(path.join(directory, ".git")) && !this.isGitDirectory(directory)
+        isSubmodule: !(await this.pathExists(path.join(directory, ".git", "HEAD")))
       });
+    }
+
+    if (depth >= maxDepth) {
+      return;
     }
 
     let entries: Dirent[];
@@ -36,21 +57,18 @@ export class RepositoryScanner {
     }
 
     for (const entry of entries) {
-      if (!entry.isDirectory() || IGNORED_DIRECTORIES.has(entry.name)) {
+      if (!entry.isDirectory() || ignored.has(entry.name)) {
         continue;
       }
 
-      await this.scanDirectory(path.join(directory, entry.name), repositories);
+      await this.scanDirectory(path.join(directory, entry.name), repositories, ignored, maxDepth, depth + 1);
     }
   }
 
-  private hasGitMetadata(directory: string): boolean {
-    return existsSync(path.join(directory, ".git"));
-  }
-
-  private isGitDirectory(directory: string): boolean {
+  private async pathExists(target: string): Promise<boolean> {
     try {
-      return existsSync(path.join(directory, ".git", "HEAD"));
+      await access(target);
+      return true;
     } catch {
       return false;
     }

@@ -24,10 +24,10 @@ describe("classifyGitError", () => {
     );
   });
 
-  it("classifies unresolvable host as remote rejected", () => {
+  it("classifies unresolvable host as a network error", () => {
     assert.strictEqual(
       classifyGitError("fatal: unable to access 'https://github.com/x': Could not resolve host: github.com"),
-      ErrorCodes.RemoteRejected
+      ErrorCodes.Network
     );
   });
 
@@ -62,5 +62,10 @@ describe("classifyGitError", () => {
 
   it("falls back to UnknownGitError for unrecognized messages", () => {
     assert.strictEqual(classifyGitError("something completely unexpected"), ErrorCodes.UnknownGitError);
+  });
+
+  it("classifies hook failures", () => {
+    assert.strictEqual(classifyGitError("husky - pre-commit script failed (code 1)"), ErrorCodes.HookFailed);
+    assert.strictEqual(classifyGitError("error: failed to push; pre-push hook declined"), ErrorCodes.HookFailed);
   });
 });

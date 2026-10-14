@@ -9,6 +9,7 @@ import type {
 import { registerCommands } from "./commands/registerCommands";
 import { t } from "./localization";
 import { shouldShowRepository } from "./repositoryVisibility";
+import { CustomCommandPanel } from "./webview/CustomCommandPanel";
 import { ConflictResolutionPanel } from "./webview/ConflictResolutionPanel";
 import { HistoryPanel } from "./webview/HistoryPanel";
 
@@ -22,6 +23,13 @@ export function activate(context: vscode.ExtensionContext): void {
   registerCommands(context, repositoryManager, () => treeProvider.refresh());
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((event) => {
+      if (
+        event.affectsConfiguration("gitWorkspacePro.scan.excludeDirectories") ||
+        event.affectsConfiguration("gitWorkspacePro.scan.maxDepth")
+      ) {
+        applyScanOptions();
+        void vscode.commands.executeCommand("gitWorkspacePro.refreshRepositories");
+      }
       if (event.affectsConfiguration("gitWorkspacePro.language")) {
         treeProvider.refresh();
         ConflictResolutionPanel.refreshOpenPanels();
@@ -29,6 +37,15 @@ export function activate(context: vscode.ExtensionContext): void {
       }
     })
   );
+
+  const applyScanOptions = () => {
+    const config = vscode.workspace.getConfiguration("gitWorkspacePro");
+    repositoryManager.setScanOptions({
+      excludeDirectories: config.get<string[]>("scan.excludeDirectories", []),
+      maxDepth: config.get<number>("scan.maxDepth", 0)
+    });
+  };
+  applyScanOptions();
 
   const rescanWorkspace = () => {
     const folders = vscode.workspace.workspaceFolders?.map((folder) => folder.uri.fsPath) ?? [];
@@ -81,6 +98,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
   const watcher = vscode.workspace.createFileSystemWatcher("**/*");
   context.subscriptions.push(
+    { dispose: () => CustomCommandPanel.disposeAll() },
     watcher,
     watcher.onDidChange(onWorkspaceFileChanged),
     watcher.onDidCreate(onWorkspaceFileChanged),

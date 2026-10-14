@@ -5,12 +5,13 @@ import type {
   PullStrategy,
   RepositoryNode
 } from "../../shared/types/repository";
-import type { CommitLogEntry } from "../../shared/types/history";
+import type { CommitDetails, CommitLogEntry } from "../../shared/types/history";
 import { GitAdapter } from "../git/GitAdapter";
-import { RepositoryScanner } from "./RepositoryScanner";
+import { RepositoryScanner, type ScanOptions } from "./RepositoryScanner";
 
 export class RepositoryManager {
   private repositories: readonly RepositoryNode[] = [];
+  private scanOptions: ScanOptions = {};
 
   public constructor(
     private readonly scanner = new RepositoryScanner(),
@@ -18,7 +19,7 @@ export class RepositoryManager {
   ) {}
 
   public async refresh(workspaceFolders: readonly string[]): Promise<readonly RepositoryNode[]> {
-    const repositories = await this.scanner.scan(workspaceFolders);
+    const repositories = await this.scanner.scan(workspaceFolders, this.scanOptions);
     this.repositories = await Promise.all(repositories.map((repository) => this.loadStatusRecursive(repository)));
     return this.repositories;
   }
@@ -112,16 +113,33 @@ export class RepositoryManager {
     await this.gitAdapter.pull(repositoryPath, strategy);
   }
 
-  public async pullBranch(repositoryPath: string, branch: string, strategy?: PullStrategy): Promise<void> {
-    await this.gitAdapter.pullBranch(repositoryPath, branch, strategy);
+  public async pullBranch(
+    repositoryPath: string,
+    branch: string,
+    strategy?: PullStrategy,
+    remote?: string
+  ): Promise<void> {
+    await this.gitAdapter.pullBranch(repositoryPath, branch, strategy, remote);
   }
 
-  public async push(repositoryPath: string): Promise<string> {
-    return this.gitAdapter.push(repositoryPath);
+  public async push(repositoryPath: string, remote?: string): Promise<string> {
+    return this.gitAdapter.push(repositoryPath, remote);
   }
 
-  public async getRemoteUrl(repositoryPath: string): Promise<string | undefined> {
-    return this.gitAdapter.getRemoteUrl(repositoryPath);
+  public async getRemoteUrl(repositoryPath: string, remote?: string): Promise<string | undefined> {
+    return this.gitAdapter.getRemoteUrl(repositoryPath, remote);
+  }
+
+  public async listRemotes(repositoryPath: string): Promise<readonly string[]> {
+    return this.gitAdapter.listRemotes(repositoryPath);
+  }
+
+  public async getUpstreamRemote(repositoryPath: string): Promise<string | undefined> {
+    return this.gitAdapter.getUpstreamRemote(repositoryPath);
+  }
+
+  public setScanOptions(options: ScanOptions): void {
+    this.scanOptions = options;
   }
 
   public async getCurrentBranch(repositoryPath: string): Promise<string | undefined> {
@@ -176,8 +194,12 @@ export class RepositoryManager {
     await this.gitAdapter.restoreAll(repositoryPath);
   }
 
-  public async deleteBranch(repositoryPath: string, branch: string): Promise<void> {
-    await this.gitAdapter.deleteBranch(repositoryPath, branch);
+  public async deleteBranch(repositoryPath: string, branch: string, force = true): Promise<void> {
+    await this.gitAdapter.deleteBranch(repositoryPath, branch, force);
+  }
+
+  public async isBranchMergedIntoHead(repositoryPath: string, branch: string): Promise<boolean> {
+    return this.gitAdapter.isBranchMergedIntoHead(repositoryPath, branch);
   }
 
   public async readConflictStage(repositoryPath: string, filePath: string, stage: 1 | 2 | 3): Promise<string> {
@@ -202,6 +224,18 @@ export class RepositoryManager {
 
   public async getLog(repositoryPath: string, maxCount?: number): Promise<readonly CommitLogEntry[]> {
     return this.gitAdapter.getLog(repositoryPath, maxCount);
+  }
+
+  public async getCommitDetails(repositoryPath: string, commitHash: string): Promise<CommitDetails> {
+    return this.gitAdapter.getCommitDetails(repositoryPath, commitHash);
+  }
+
+  public async listRemoteBranches(repositoryPath: string): Promise<readonly string[]> {
+    return this.gitAdapter.listRemoteBranches(repositoryPath);
+  }
+
+  public async checkoutRemoteBranch(repositoryPath: string, remoteBranch: string): Promise<void> {
+    await this.gitAdapter.checkoutRemoteBranch(repositoryPath, remoteBranch);
   }
 
   public async getCommitDiffFiles(repositoryPath: string, commitHash: string): Promise<readonly string[]> {

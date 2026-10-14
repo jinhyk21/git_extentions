@@ -6,10 +6,11 @@ import type {
   GitOperationType,
   PullStrategy
 } from "../../shared/types/repository";
-import type { CommitLogEntry } from "../../shared/types/history";
+import type { CommitDetails, CommitLogEntry } from "../../shared/types/history";
 import { ErrorCodes } from "../../shared/constants/errorCodes";
 import { GitWorkspaceError } from "../errors/GitWorkspaceError";
 import { classifyGitError } from "./classifyGitError";
+import { GIT_COMMIT_DETAILS_FORMAT, parseCommitMeta, parseNumstat } from "./parseCommitDetails";
 import { GIT_LOG_PRETTY, parseGitLog } from "./parseGitLog";
 import { GitProcessRunner, type GitProcessResult } from "./GitProcessRunner";
 import { parseGitStatus } from "./parseGitStatus";
@@ -52,7 +53,7 @@ export class GitAdapter {
   }
 
   private async countUnpushedCommits(path: string): Promise<number> {
-    const result = await this.exec(["rev-list", "--count", "HEAD"], path, 5_000);
+    const result = await this.exec(["rev-list", "--count", "HEAD", "--not", "--remotes"], path, 5_000);
     if (result.exitCode !== 0) {
       return 0;
     }
@@ -121,8 +122,29 @@ export class GitAdapter {
     );
   }
 
-  public async push(repositoryPath: string): Promise<string> {
-    return this.runForOutputOrThrow(["push", "-u", "origin", "HEAD"], repositoryPath, "Push failed", 60_000);
+  public async push(repositoryPath: string, remote = "origin"): Promise<string> {
+    return this.runForOutputOrThrow(["push", "-u", remote, "HEAD"], repositoryPath, "Push failed", 60_000);
+  }
+
+  public async listRemotes(repositoryPath: string): Promise<readonly string[]> {
+    const result = await this.exec(["remote"], repositoryPath, 5_000);
+    if (result.exitCode !== 0) {
+      return [];
+    }
+
+    return result.stdout.split(/\r?\n/).map((remote) => remote.trim()).filter(Boolean);
+  }
+
+  /** The remote the current branch tracks, if it has an upstream configured. */
+  public async getUpstreamRemote(repositoryPath: string): Promise<string | undefined> {
+    const branch = await this.getCurrentBranch(repositoryPath);
+    if (!branch) {
+      return undefined;
+    }
+
+    const result = await this.exec(["config", "--get", `branch.${branch}.remote`], repositoryPath, 5_000);
+    const remote = result.stdout.trim();
+    return result.exitCode === 0 && remote.length > 0 && remote !== "." ? remote : undefined;
   }
 
   public async getRemoteUrl(repositoryPath: string, remoteName = "origin"): Promise<string | undefined> {
@@ -145,11 +167,44 @@ export class GitAdapter {
     return result.stdout.split(/\r?\n/).map((branch) => branch.trim()).filter(Boolean);
   }
 
+  /** Remote-tracking branches such as "origin/feature", without the symbolic "<remote>/HEAD" entries. */
+  public async listRemoteBranches(repositoryPath: string): Promise<readonly string[]> {
+    const result = await this.exec(["branch", "-r", "--format=%(refname:short)"], repositoryPath, 10_000);
+    if (result.exitCode !== 0) {
+      return [];
+    }
+
+    return result.stdout
+      .split(/\r?\n/)
+      .map((branch) => branch.trim())
+      .filter((branch) => branch.length > 0 && !branch.endsWith("/HEAD") && branch.includes("/"));
+  }
+
+  /**
+   * Switches to a remote-tracking branch: reuses the local branch of the same
+   * name when it exists, otherwise creates one that tracks the remote branch.
+   */
+  public async checkoutRemoteBranch(repositoryPath: string, remoteBranch: string): Promise<void> {
+    const localName = remoteBranch.slice(remoteBranch.indexOf("/") + 1);
+    const localExists =
+      (await this.exec(["show-ref", "--verify", "--quiet", `refs/heads/${localName}`], repositoryPath, 5_000))
+        .exitCode === 0;
+    await this.runOrThrow(
+      localExists ? ["switch", localName] : ["switch", "--track", remoteBranch],
+      repositoryPath,
+      "Checkout branch failed"
+    );
+  }
+
   public async checkoutBranch(repositoryPath: string, branch: string): Promise<void> {
     await this.runOrThrow(["switch", branch], repositoryPath, "Checkout branch failed");
   }
 
   public async createBranch(repositoryPath: string, branch: string): Promise<void> {
+    const validation = await this.exec(["check-ref-format", "--branch", branch], repositoryPath, 5_000);
+    if (validation.exitCode !== 0) {
+      throw new GitWorkspaceError(ErrorCodes.UnknownGitError, `"${branch}" is not a valid branch name.`);
+    }
     await this.runOrThrow(["switch", "-c", branch], repositoryPath, "Create branch failed");
   }
 
@@ -202,8 +257,13 @@ export class GitAdapter {
     await this.runOrThrow(["clean", "-fd"], repositoryPath, "Clean untracked files failed", 30_000);
   }
 
-  public async deleteBranch(repositoryPath: string, branch: string): Promise<void> {
-    await this.runOrThrow(["branch", "-D", branch], repositoryPath, "Delete branch failed");
+  public async deleteBranch(repositoryPath: string, branch: string, force = true): Promise<void> {
+    await this.runOrThrow(["branch", force ? "-D" : "-d", "--", branch], repositoryPath, "Delete branch failed");
+  }
+
+  public async isBranchMergedIntoHead(repositoryPath: string, branch: string): Promise<boolean> {
+    const result = await this.exec(["merge-base", "--is-ancestor", branch, "HEAD"], repositoryPath, 10_000);
+    return result.exitCode === 0;
   }
 
   public async readConflictStage(repositoryPath: string, filePath: string, stage: 1 | 2 | 3): Promise<string> {
@@ -272,16 +332,38 @@ export class GitAdapter {
   }
 
   public async getCommitDiffFiles(repositoryPath: string, commitHash: string): Promise<readonly string[]> {
-    const result = await this.exec(
-      ["diff-tree", "--no-commit-id", "--name-only", "-z", "-r", commitHash],
-      repositoryPath,
-      10_000
-    );
+    // Diff against the first parent so merge commits show what the merge brought in.
+    // A root commit has no parent, so fall back to diff-tree --root.
+    const hasParent = (await this.exec(["rev-parse", "--verify", "--quiet", `${commitHash}^1`], repositoryPath, 5_000))
+      .exitCode === 0;
+    const args = hasParent
+      ? ["diff", "--name-only", "-z", `${commitHash}^1`, commitHash]
+      : ["diff-tree", "--no-commit-id", "--name-only", "-z", "-r", "--root", commitHash];
+    const result = await this.exec(args, repositoryPath, 10_000);
     if (result.exitCode !== 0) {
       throw this.toGitError(result.stderr, "Read commit files failed");
     }
 
     return result.stdout.split("\0").filter(Boolean);
+  }
+
+  public async getCommitDetails(repositoryPath: string, commitHash: string): Promise<CommitDetails> {
+    const meta = await this.exec(["show", "-s", GIT_COMMIT_DETAILS_FORMAT, commitHash], repositoryPath, 10_000);
+    if (meta.exitCode !== 0) {
+      throw this.toGitError(meta.stderr, "Read commit details failed");
+    }
+
+    const parsed = parseCommitMeta(meta.stdout);
+    const base = parsed.parentHashes[0];
+    const stat = await this.exec(
+      base
+        ? ["-c", "core.quotePath=false", "diff", "--numstat", "--no-renames", base, commitHash]
+        : ["-c", "core.quotePath=false", "diff-tree", "--numstat", "--no-renames", "--root", "-r", "--no-commit-id", commitHash],
+      repositoryPath,
+      15_000
+    );
+
+    return { ...parsed, files: stat.exitCode === 0 ? parseNumstat(stat.stdout) : [] };
   }
 
   public async getOperationState(repositoryPath: string): Promise<GitOperationState | undefined> {

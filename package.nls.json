@@ -33,5 +33,18 @@
   "config.language.auto": "Follow the VS Code display language.",
   "config.language.vi": "Use Vietnamese.",
   "config.language.en": "Use English.",
-  "config.language.zh-cn": "Use Simplified Chinese."
+  "config.language.zh-cn": "Use Simplified Chinese.",
+  "command.runCustomCommand": "Git Workspace Pro: Run Command",
+  "config.customCommand.historySize": "Number of recent custom commands to remember per workspace.",
+  "config.customCommand.shell": "Shell used to run custom commands (empty = system default; ignored on Windows, where cmd.exe is used).",
+  "config.customCommand.autoRefresh": "Refresh repository status after a custom command finishes.",
+  "config.customCommand.timeoutSeconds": "Stop a custom command after this many seconds (0 = no limit).",
+  "config.pullStrategy.description": "How Pull integrates divergent branches. 'ask' prompts every time.",
+  "config.pullStrategy.ask": "Ask every time.",
+  "config.pullStrategy.ff-only": "Fast-forward only.",
+  "config.pullStrategy.rebase": "Rebase local commits.",
+  "config.pullStrategy.merge": "Create a merge commit.",
+  "config.history.maxCount": "Maximum number of commits loaded in the History panel.",
+  "config.scan.excludeDirectories": "Extra directory names to skip when scanning for repositories (for example vendor, .venv, target). Built-in: .git, node_modules, dist, out, .next, .turbo.",
+  "config.scan.maxDepth": "Maximum folder depth to scan for repositories below each workspace folder (0 = unlimited)."
 }
