@@ -33,5 +33,18 @@
   "config.language.auto": "Theo ngôn ngữ hiển thị của VS Code.",
   "config.language.vi": "Dùng Tiếng Việt.",
   "config.language.en": "Dùng English.",
-  "config.language.zh-cn": "Dùng Tiếng Trung giản thể."
+  "config.language.zh-cn": "Dùng Tiếng Trung giản thể.",
+  "command.runCustomCommand": "Git Workspace Pro: Chạy lệnh",
+  "config.customCommand.historySize": "Số lệnh tùy chỉnh gần đây được nhớ cho mỗi workspace.",
+  "config.customCommand.shell": "Shell dùng để chạy lệnh tùy chỉnh (để trống = mặc định của hệ thống; bỏ qua trên Windows, luôn dùng cmd.exe).",
+  "config.customCommand.autoRefresh": "Làm mới trạng thái kho mã sau khi lệnh tùy chỉnh chạy xong.",
+  "config.customCommand.timeoutSeconds": "Dừng lệnh tùy chỉnh sau số giây này (0 = không giới hạn).",
+  "config.pullStrategy.description": "Cách Pull tích hợp các nhánh phân kỳ. 'ask' sẽ hỏi mỗi lần.",
+  "config.pullStrategy.ask": "Hỏi mỗi lần.",
+  "config.pullStrategy.ff-only": "Chỉ fast-forward.",
+  "config.pullStrategy.rebase": "Rebase commit cục bộ.",
+  "config.pullStrategy.merge": "Tạo merge commit.",
+  "config.history.maxCount": "Số commit tối đa được tải trong bảng Lịch sử.",
+  "config.scan.excludeDirectories": "Tên thư mục bổ sung cần bỏ qua khi quét kho mã (ví dụ vendor, .venv, target). Mặc định: .git, node_modules, dist, out, .next, .turbo.",
+  "config.scan.maxDepth": "Độ sâu thư mục tối đa khi quét kho mã bên dưới mỗi workspace folder (0 = không giới hạn)."
 }

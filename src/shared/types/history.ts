@@ -33,3 +33,23 @@ export type CommitGraph = {
   readonly edges: readonly GraphEdge[];
   readonly columnCount: number;
 };
+
+export type CommitFileStat = {
+  readonly path: string;
+  /** null for binary files, which git reports as "-". */
+  readonly additions: number | null;
+  readonly deletions: number | null;
+};
+
+export type CommitDetails = {
+  readonly hash: string;
+  readonly parentHashes: readonly string[];
+  readonly authorName: string;
+  readonly authorEmail: string;
+  readonly authorDate: string;
+  readonly committerName: string;
+  readonly committerDate: string;
+  readonly subject: string;
+  readonly body: string;
+  readonly files: readonly CommitFileStat[];
+};

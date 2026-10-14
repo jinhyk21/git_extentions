@@ -33,5 +33,18 @@
   "config.language.auto": "跟随 VS Code 显示语言。",
   "config.language.vi": "使用越南语。",
   "config.language.en": "使用英语。",
-  "config.language.zh-cn": "使用简体中文。"
+  "config.language.zh-cn": "使用简体中文。",
+  "command.runCustomCommand": "Git Workspace Pro：运行命令",
+  "config.customCommand.historySize": "每个工作区记住的最近自定义命令数量。",
+  "config.customCommand.shell": "运行自定义命令所用的 shell（留空 = 系统默认；在 Windows 上忽略，始终使用 cmd.exe）。",
+  "config.customCommand.autoRefresh": "自定义命令结束后刷新仓库状态。",
+  "config.customCommand.timeoutSeconds": "自定义命令运行超过此秒数后停止（0 = 不限制）。",
+  "config.pullStrategy.description": "Pull 处理分叉分支的方式。“ask”表示每次询问。",
+  "config.pullStrategy.ask": "每次询问。",
+  "config.pullStrategy.ff-only": "仅快进。",
+  "config.pullStrategy.rebase": "变基本地提交。",
+  "config.pullStrategy.merge": "创建合并提交。",
+  "config.history.maxCount": "历史面板中加载的最大提交数。",
+  "config.scan.excludeDirectories": "扫描仓库时额外跳过的目录名（例如 vendor、.venv、target）。内置：.git、node_modules、dist、out、.next、.turbo。",
+  "config.scan.maxDepth": "在每个工作区文件夹下扫描仓库的最大目录深度（0 = 不限制）。"
 }

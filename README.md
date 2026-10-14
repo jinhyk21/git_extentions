@@ -13,6 +13,10 @@ Git Workspace Pro là tiện ích mở rộng VS Code để quản lý nhiều k
 - **Conflict editor 3-pane**: Current / Result / Incoming theo phong cách IntelliJ IDEA, có Base và xử lý từng conflict hunk
 - **Conflict nâng cao**: Hỗ trợ diff3, modify/delete, file không có marker và binary conflict
 - **Stash**: Push (kèm tùy chọn message), Pop
+- **Chạy lệnh của bạn**: Ô nhập nhiều dòng (Ctrl+Enter để chạy) chạy ngay trong thư mục kho, xem output trực tiếp, dừng được, nhớ lịch sử lệnh — không cần mở terminal
+- **Lịch sử & chi tiết commit**: Đồ thị commit, nút ⓘ mở nội dung đầy đủ, thống kê từng tệp, mở diff từng tệp
+- **An toàn khi thao tác**: Cảnh báo thay đổi chưa commit trước Checkout/Merge/Rebase (có "Stash & Continue"), hỏi Stage All khi chưa stage gì, thông báo riêng khi Git hook từ chối, xóa nhánh chưa merge cần xác nhận "Force Delete"
+- **Nhiều remote**: Push/Pull dùng remote upstream của nhánh, remote duy nhất, hoặc cho bạn chọn; Checkout được cả nhánh remote
 - **Menu thao tác**: Nhấp chuột phải vào kho lưu trữ để truy cập tất cả thao tác Git
 - **Biểu tượng tùy chỉnh**: Logo riêng cho activity bar và marketplace
 - **Đa ngôn ngữ**: Tự động theo VS Code hoặc chọn riêng Tiếng Việt, English, 中文（简体） cho cây repo, menu Git, thông báo, History và Conflict Resolver
@@ -28,10 +32,31 @@ Mở Command Palette và chạy `Git Workspace Pro: Đổi ngôn ngữ hiển th
 
 Bạn cũng có thể đổi tại Settings bằng cấu hình `gitWorkspacePro.language`.
 
+## Cài đặt cấu hình
+
+| Cấu hình | Mặc định | Mô tả |
+|----------|----------|-------|
+| `gitWorkspacePro.language` | `auto` | Ngôn ngữ giao diện |
+| `gitWorkspacePro.pullStrategy` | `ask` | Cách Pull xử lý nhánh phân kỳ: `ask`, `ff-only`, `rebase`, `merge` |
+| `gitWorkspacePro.history.maxCount` | `300` | Số commit tối đa trong bảng Lịch sử |
+| `gitWorkspacePro.scan.excludeDirectories` | `[]` | Tên thư mục bỏ qua thêm khi quét kho (ví dụ `vendor`, `.venv`, `target`) |
+| `gitWorkspacePro.scan.maxDepth` | `0` | Độ sâu quét tối đa (0 = không giới hạn) |
+| `gitWorkspacePro.customCommand.historySize` | `30` | Số lệnh gần đây được nhớ |
+| `gitWorkspacePro.customCommand.shell` | rỗng | Shell chạy lệnh (rỗng = mặc định hệ thống; Windows luôn dùng `cmd.exe`) |
+| `gitWorkspacePro.customCommand.autoRefresh` | `true` | Làm mới cây kho sau khi lệnh chạy xong |
+| `gitWorkspacePro.customCommand.timeoutSeconds` | `0` | Tự dừng lệnh sau số giây này (0 = không giới hạn) |
+
+## Chạy lệnh tùy chỉnh
+
+Chọn **Run Command** trong menu `...` của kho (hoặc chuột phải vào kho, hoặc Command Palette → `Git Workspace Pro: Run Command`). Nhập lệnh (Enter xuống dòng, **Ctrl+Enter** để chạy), tùy chọn thư mục con, xem output trực tiếp và bấm **Stop** để dừng. Lệnh chạy với quyền của bạn như trong terminal.
+
+Lưu ý: lệnh chạy không có terminal thật nên không nhập tương tác được (ví dụ `npm init`, hỏi mật khẩu).
+
 ## Yêu cầu
 
 - [Visual Studio Code](https://code.visualstudio.com/) phiên bản 1.90.0 trở lên
-- [Git](https://git-scm.com/) được cài đặt và có trong PATH
+- [Git](https://git-scm.com/) **2.23 trở lên** (dùng `git switch` / `git restore`) được cài đặt và có trong PATH
+- Workspace phải được tin cậy (Workspace Trust) vì extension chạy các lệnh Git làm thay đổi kho
 - [Node.js](https://nodejs.org/) (chỉ dành cho nhà phát triển)
 
 ## Cài đặt
@@ -184,7 +209,9 @@ npm install          # Cài dependencies
 npm run compile      # Biên dịch TypeScript
 npm run watch        # Biên dịch tự động
 npm run lint         # Chạy ESLint
-npm test             # Kiểm tra (chạy compile)
+npm test             # compile + lint + unit/integration/system tests
+npm run test:vscode  # Smoke test trong VS Code thật (tải VS Code lần đầu; Linux không màn hình dùng xvfb-run)
+npm run qa:all       # Bộ QA đầy đủ
 ```
 
 ### Chạy ở chế độ phát triển
@@ -205,3 +232,10 @@ File `.vsix` sẽ được tạo trong thư mục gốc.
 ## License
 
 MIT
+
+## Known issues
+
+- Lệnh trong **Run Command** không tương tác được (không có TTY).
+- Danh sách nhánh của Delete và Pull From Branch chỉ gồm nhánh cục bộ.
+- Nhận diện lỗi Git hook dựa trên nội dung thông báo nên hook tự đặt thông điệp lạ sẽ hiện như lỗi Git thông thường.
+- Chưa hỗ trợ amend, tag, cherry-pick khởi tạo từ giao diện và xem danh sách stash.

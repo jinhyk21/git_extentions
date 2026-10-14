@@ -8,7 +8,9 @@ export const ErrorCodes = {
   AuthFailed: "GIT_007",
   RemoteRejected: "GIT_008",
   Timeout: "GIT_009",
-  UnknownGitError: "GIT_010"
+  UnknownGitError: "GIT_010",
+  Network: "GIT_011",
+  HookFailed: "GIT_012"
 } as const;
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];

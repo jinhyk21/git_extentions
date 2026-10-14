@@ -1,6 +1,6 @@
 import * as assert from "node:assert";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { RepositoryScanner } from "../../src/core/repository/RepositoryScanner";
@@ -78,5 +78,41 @@ describe("RepositoryScanner", () => {
     const result = await scanner.scan([workDir, workDir]);
 
     assert.strictEqual(result.length, 1);
+  });
+
+  it("skips configured extra directories", async () => {
+    initRepo(workDir);
+    initRepo(path.join(workDir, "vendor", "lib"));
+    initRepo(path.join(workDir, "apps", "web"));
+
+    const result = await new RepositoryScanner().scan([workDir], { excludeDirectories: ["vendor"] });
+    const names = result.flatMap((repo) => repo.children.map((child) => child.name));
+
+    assert.deepStrictEqual(names, ["web"]);
+  });
+
+  it("respects maxDepth", async () => {
+    initRepo(workDir);
+    initRepo(path.join(workDir, "a"));
+    initRepo(path.join(workDir, "a", "b", "c"));
+
+    const shallow = await new RepositoryScanner().scan([workDir], { maxDepth: 1 });
+    const deep = await new RepositoryScanner().scan([workDir]);
+
+    const count = (nodes: readonly { children: readonly unknown[] }[]): number =>
+      nodes.reduce((total, node) => total + 1 + count(node.children as typeof nodes), 0);
+    assert.strictEqual(count(shallow), 2);
+    assert.strictEqual(count(deep), 3);
+  });
+
+  it("marks a repository whose .git is a file as a submodule", async () => {
+    initRepo(workDir);
+    const sub = path.join(workDir, "sub");
+    mkdirSync(sub);
+    writeFileSync(path.join(sub, ".git"), "gitdir: ../.git/modules/sub\n");
+
+    const result = await new RepositoryScanner().scan([workDir]);
+
+    assert.strictEqual(result[0]?.children[0]?.isSubmodule, true);
   });
 });

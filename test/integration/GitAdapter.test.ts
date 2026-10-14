@@ -359,4 +359,148 @@ describe("GitAdapter (integration)", () => {
       Buffer.from([0, 9, 9, 9])
     );
   });
+
+  it("lists the files of a merge commit against its first parent", async () => {
+    git(repoDir, ["switch", "-q", "-c", "feature"]);
+    writeFile(repoDir, "feature.txt", "f\n");
+    git(repoDir, ["add", "."]);
+    git(repoDir, ["commit", "-q", "-m", "feature work"]);
+    git(repoDir, ["switch", "-q", "main"]);
+    writeFile(repoDir, "main.txt", "m\n");
+    git(repoDir, ["add", "."]);
+    git(repoDir, ["commit", "-q", "-m", "main work"]);
+    git(repoDir, ["merge", "--no-ff", "-q", "-m", "merge feature", "feature"]);
+
+    const log = await adapter.getLog(repoDir);
+    const files = await adapter.getCommitDiffFiles(repoDir, log[0]?.hash ?? "");
+
+    assert.deepStrictEqual(files, ["feature.txt"]);
+  });
+
+  it("lists the files of a root commit", async () => {
+    const log = await adapter.getLog(repoDir);
+    const files = await adapter.getCommitDiffFiles(repoDir, log[0]?.hash ?? "");
+
+    assert.deepStrictEqual(files, ["README.md"]);
+  });
+
+  it("counts only commits not present on any remote when there is no upstream", async () => {
+    const remoteDir = mkdtempSync(path.join(tmpdir(), "gwp-remote-"));
+    try {
+      git(remoteDir, ["init", "--quiet", "--bare", "--initial-branch=main"]);
+      git(repoDir, ["remote", "add", "origin", remoteDir]);
+      git(repoDir, ["push", "-q", "origin", "main"]);
+      git(repoDir, ["switch", "-q", "-c", "local-only"]);
+      writeFile(repoDir, "a.txt", "a\n");
+      git(repoDir, ["add", "."]);
+      git(repoDir, ["commit", "-q", "-m", "local commit"]);
+
+      const status = await adapter.getStatus(repoDir);
+
+      assert.strictEqual(status.ahead, 1);
+    } finally {
+      rmSync(remoteDir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects invalid branch names before running git switch", async () => {
+    await assert.rejects(() => adapter.createBranch(repoDir, "bad..name"), /not a valid branch name/);
+    await assert.rejects(() => adapter.createBranch(repoDir, "-oops"), /not a valid branch name/);
+  });
+
+  it("deletes a merged branch safely and refuses an unmerged one without force", async () => {
+    git(repoDir, ["branch", "merged"]);
+    git(repoDir, ["switch", "-q", "-c", "unmerged"]);
+    writeFile(repoDir, "u.txt", "u\n");
+    git(repoDir, ["add", "."]);
+    git(repoDir, ["commit", "-q", "-m", "unmerged work"]);
+    git(repoDir, ["switch", "-q", "main"]);
+
+    assert.strictEqual(await adapter.isBranchMergedIntoHead(repoDir, "merged"), true);
+    assert.strictEqual(await adapter.isBranchMergedIntoHead(repoDir, "unmerged"), false);
+
+    await adapter.deleteBranch(repoDir, "merged", false);
+    await assert.rejects(() => adapter.deleteBranch(repoDir, "unmerged", false), /not fully merged/);
+    await adapter.deleteBranch(repoDir, "unmerged", true);
+
+    assert.deepStrictEqual(await adapter.listBranches(repoDir), ["main"]);
+  });
+
+  it("lists remotes, resolves the upstream remote and pushes to a chosen remote", async () => {
+    const upstreamDir = mkdtempSync(path.join(tmpdir(), "gwp-upstream-"));
+    const forkDir = mkdtempSync(path.join(tmpdir(), "gwp-fork-"));
+    try {
+      git(upstreamDir, ["init", "--quiet", "--bare", "--initial-branch=main"]);
+      git(forkDir, ["init", "--quiet", "--bare", "--initial-branch=main"]);
+      git(repoDir, ["remote", "add", "upstream", upstreamDir]);
+      git(repoDir, ["remote", "add", "fork", forkDir]);
+
+      assert.deepStrictEqual([...(await adapter.listRemotes(repoDir))].sort(), ["fork", "upstream"]);
+      assert.strictEqual(await adapter.getUpstreamRemote(repoDir), undefined);
+
+      await adapter.push(repoDir, "fork");
+
+      assert.strictEqual(await adapter.getUpstreamRemote(repoDir), "fork");
+      assert.strictEqual(execFileSync("git", ["rev-parse", "main"], { cwd: forkDir }).toString().trim().length, 40);
+      assert.throws(() => execFileSync("git", ["rev-parse", "--verify", "main"], { cwd: upstreamDir, stdio: "pipe" }));
+    } finally {
+      rmSync(upstreamDir, { recursive: true, force: true });
+      rmSync(forkDir, { recursive: true, force: true });
+    }
+  });
+
+  it("returns no remotes for a repository without any", async () => {
+    assert.deepStrictEqual(await adapter.listRemotes(repoDir), []);
+  });
+
+  it("returns commit details with body and per-file stats", async () => {
+    writeFile(repoDir, "a.txt", "one\ntwo\n");
+    git(repoDir, ["add", "."]);
+    git(repoDir, ["commit", "-q", "-m", "Add a.txt", "-m", "Detailed body line."]);
+
+    const log = await adapter.getLog(repoDir);
+    const details = await adapter.getCommitDetails(repoDir, log[0]?.hash ?? "");
+
+    assert.strictEqual(details.subject, "Add a.txt");
+    assert.strictEqual(details.body, "Detailed body line.");
+    assert.strictEqual(details.authorName, "Test");
+    assert.deepStrictEqual(details.files, [{ path: "a.txt", additions: 2, deletions: 0 }]);
+  });
+
+  it("returns commit details for a root commit", async () => {
+    const log = await adapter.getLog(repoDir);
+    const details = await adapter.getCommitDetails(repoDir, log[0]?.hash ?? "");
+
+    assert.deepStrictEqual(details.parentHashes, []);
+    assert.deepStrictEqual(details.files, [{ path: "README.md", additions: 1, deletions: 0 }]);
+  });
+
+  it("lists remote branches without the symbolic HEAD and checks them out with tracking", async () => {
+    const remoteDir = mkdtempSync(path.join(tmpdir(), "gwp-remote-br-"));
+    try {
+      git(remoteDir, ["init", "--quiet", "--bare", "--initial-branch=main"]);
+      git(repoDir, ["remote", "add", "origin", remoteDir]);
+      git(repoDir, ["push", "-q", "origin", "main"]);
+      git(repoDir, ["switch", "-q", "-c", "feature"]);
+      writeFile(repoDir, "f.txt", "f\n");
+      git(repoDir, ["add", "."]);
+      git(repoDir, ["commit", "-q", "-m", "feature"]);
+      git(repoDir, ["push", "-q", "origin", "feature"]);
+      git(repoDir, ["switch", "-q", "main"]);
+      git(repoDir, ["branch", "-q", "-D", "feature"]);
+      git(repoDir, ["fetch", "-q", "origin"]);
+
+      assert.deepStrictEqual([...(await adapter.listRemoteBranches(repoDir))].sort(), ["origin/feature", "origin/main"]);
+
+      await adapter.checkoutRemoteBranch(repoDir, "origin/feature");
+      assert.strictEqual(await adapter.getCurrentBranch(repoDir), "feature");
+      assert.strictEqual(await adapter.getUpstreamRemote(repoDir), "origin");
+
+      git(repoDir, ["switch", "-q", "main"]);
+      await adapter.checkoutRemoteBranch(repoDir, "origin/feature");
+      assert.strictEqual(await adapter.getCurrentBranch(repoDir), "feature");
+    } finally {
+      rmSync(remoteDir, { recursive: true, force: true });
+    }
+  });
 });

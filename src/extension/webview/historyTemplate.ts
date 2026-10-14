@@ -10,7 +10,7 @@ export function getHistoryHtml(
 ): string {
   const nonce = createNonce();
   const translations = Object.fromEntries(
-    ["History", "Refresh", "No commits found."].map((message) => [message, translate(language, message)])
+    ["History", "Refresh", "No commits found.", "Commit details"].map((message) => [message, translate(language, message)])
   );
   const dataScript = JSON.stringify({ repositoryName, graph, translations });
 
@@ -126,6 +126,16 @@ export function getHistoryHtml(
     border-color: var(--vscode-descriptionForeground);
     color: var(--vscode-descriptionForeground);
   }
+  .details-button {
+    margin-left: auto;
+    background: transparent;
+    color: var(--vscode-descriptionForeground);
+    border: none;
+    cursor: pointer;
+    padding: 0 8px;
+    font-size: 14px;
+  }
+  .details-button:hover { color: var(--vscode-foreground); }
   .empty-state {
     padding: 24px;
     color: var(--vscode-descriptionForeground);
@@ -280,6 +290,18 @@ function getClientScript(): string {
       info.appendChild(metaLine);
 
       rowElement.appendChild(info);
+
+      const detailsButton = document.createElement('button');
+      detailsButton.className = 'details-button';
+      detailsButton.textContent = 'ⓘ';
+      detailsButton.title = tr('Commit details');
+      detailsButton.setAttribute('aria-label', tr('Commit details'));
+      detailsButton.addEventListener('click', (event) => {
+        event.stopPropagation();
+        vscodeApi.postMessage({ type: 'showCommitDetails', hash: node.commit.hash });
+      });
+      rowElement.appendChild(detailsButton);
+
       rowElement.addEventListener('click', () => {
         vscodeApi.postMessage({
           type: 'openCommitDiff',

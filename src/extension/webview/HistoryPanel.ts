@@ -3,10 +3,12 @@ import path from "node:path";
 import type { RepositoryManager } from "../../core/repository/RepositoryManager";
 import { buildCommitGraph } from "../../core/git/buildCommitGraph";
 import { getActiveLanguage, t } from "../localization";
+import { CommitDetailsPanel } from "./CommitDetailsPanel";
 import { getHistoryHtml } from "./historyTemplate";
 
 type WebviewOutboundMessage =
   | { readonly type: "openCommitDiff"; readonly hash: string; readonly hasParent: boolean }
+  | { readonly type: "showCommitDetails"; readonly hash: string }
   | { readonly type: "refresh" };
 
 function isWebviewOutboundMessage(value: unknown): value is WebviewOutboundMessage {
@@ -16,6 +18,10 @@ function isWebviewOutboundMessage(value: unknown): value is WebviewOutboundMessa
 
   if (value.type === "refresh") {
     return true;
+  }
+
+  if (value.type === "showCommitDetails") {
+    return "hash" in value && typeof value.hash === "string";
   }
 
   return (
@@ -83,7 +89,10 @@ export class HistoryPanel {
 
     try {
       this.panel.title = t("History: {repository}", { repository: this.repositoryName });
-      const commits = await this.repositoryManager.getLog(this.repositoryRootPath);
+      const commits = await this.repositoryManager.getLog(
+        this.repositoryRootPath,
+        vscode.workspace.getConfiguration("gitWorkspacePro").get<number>("history.maxCount", 300)
+      );
       const graph = buildCommitGraph(commits);
       this.panel.webview.html = getHistoryHtml(
         this.panel.webview,
@@ -100,6 +109,11 @@ export class HistoryPanel {
   private async handleMessage(message: WebviewOutboundMessage): Promise<void> {
     if (message.type === "refresh") {
       await this.render();
+      return;
+    }
+
+    if (message.type === "showCommitDetails") {
+      await CommitDetailsPanel.open(this.repositoryManager, this.repositoryRootPath, this.repositoryName, message.hash);
       return;
     }
 

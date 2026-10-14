@@ -35,8 +35,8 @@
 - Done: Add commit message input.
 - Done: Support stage all then commit.
 - Done: Refresh repository status after commit.
-- Pending: Validate staged files before allowing commit.
-- Pending: Handle hook failures with a dedicated message (currently surfaced as a generic Git error).
+- Done: Validate staged files before allowing commit (offers Stage All & Commit).
+- Done: Handle hook failures with a dedicated message.
 
 ## Milestone 4: Branch Manager
 
@@ -45,8 +45,8 @@
 - Done: Delete branch with confirmation.
 - Done: Merge branch (with destructive-action confirmation).
 - Done: Rebase onto branch (with destructive-action confirmation).
-- Pending: List local vs. remote branches separately (current picker lists local branches only).
-- Pending: Detect and warn on dirty working tree before checkout/merge/rebase.
+- Done: List local vs. remote branches separately (checkout, merge, rebase).
+- Done: Detect and warn on dirty working tree before checkout/merge/rebase (Stash & Continue).
 
 ## Milestone 5: Sync
 
@@ -56,6 +56,7 @@
 - Done: Push repository (with upstream tracking via `-u`).
 - Done: Detect and surface a merge/pull request URL from push output.
 - Done: Classify Git errors (auth, network, rejected push, etc.) via `classifyGitError`.
+- Done: Choose the remote for push/pull-from-branch (upstream remote, single remote, or picker).
 - Pending: Dedicated retry/guidance UX per error category (currently a single error message).
 
 ## Milestone 6: History
@@ -65,7 +66,7 @@
 - Done: Show commit list with author, date, subject, and branch/tag/remote ref badges.
 - Done: Render a commit graph (lane/column assignment and merge edges) alongside the list.
 - Done: Open commit diff (per-file two-way diff via the `git:` content provider; falls back to opening the file directly for root commits with no parent).
-- Pending: Show full commit details (body, stats) in a dedicated panel.
+- Done: Show full commit details (body, stats) in a dedicated panel.
 
 ## Milestone 7: Merge/Rebase/Conflict
 
@@ -81,8 +82,17 @@
 - Done: Navigate automatically to the next conflicted file.
 - Done: Resolve modify/delete and binary conflicts by choosing a complete side.
 
+## Milestone 8: Custom Commands
+
+- Done: Run Command webview with multi-line input, streamed output, stop, history, and working-directory selection.
+- Done: `ShellCommandRunner` (temp script file, process-tree kill, output cap, timeout) separate from `GitProcessRunner`.
+- Pending: "Run in integrated terminal" button for interactive commands.
+
 ## Cross-cutting: Quality & CI
 
+- Done: Smoke tests inside a real VS Code host via `@vscode/test-electron` (`npm run test:vscode`), run in CI (Xvfb on Linux).
+- Done: CI `package` job builds the VSIX with `vsce` and uploads it as an artifact.
+- Done: `@types/vscode` pinned to 1.90.0 to match `engines.vscode` (required by `vsce package`).
 - Done: CI runs the full test suite on `ubuntu-latest`, `windows-latest`, and `macos-latest`.
 - Done: `RepositoryManager.findRepositoryForPath` uses `path.sep` instead of a hardcoded `/`, so path matching works on Windows.
 - Done: Unit tests for pure command-guard logic (`commandGuards.ts`) that do not require mocking the `vscode` module.

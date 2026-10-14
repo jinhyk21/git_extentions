@@ -1,9 +1,10 @@
 import { ErrorCodes, type ErrorCode } from "../../shared/constants/errorCodes";
 
 const PATTERNS: readonly (readonly [RegExp, ErrorCode])[] = [
+  [/(pre-commit|commit-msg|prepare-commit-msg|pre-merge-commit|pre-push|pre-rebase)\b.*\b(hook|script)\b|\bhook\b.*\b(declined|failed|exited)|husky/i, ErrorCodes.HookFailed],
   [/not a git repository/i, ErrorCodes.RepositoryNotFound],
   [/(fatal: could not read (username|password)|authentication failed|permission denied \(publickey\)|invalid username or password)/i, ErrorCodes.AuthFailed],
-  [/(could not resolve host|network is unreachable|connection timed out|unable to access.*could not resolve)/i, ErrorCodes.RemoteRejected],
+  [/(could not resolve host|network is unreachable|connection timed out|unable to access.*could not resolve)/i, ErrorCodes.Network],
   [/(\[rejected\]|failed to push some refs|non-fast-forward)/i, ErrorCodes.RemoteRejected],
   [/rebase in progress|could not apply|conflict.*rebase/i, ErrorCodes.RebaseConflict],
   [/you have not concluded your merge|merge conflict|conflict \(content\)|automatic merge failed/i, ErrorCodes.MergeConflict],

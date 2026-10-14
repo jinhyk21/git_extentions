@@ -4,6 +4,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- "Run Command" panel: type a multi-line command (Ctrl+Enter to run), run it in the selected repository (optional sub-directory), see streamed stdout/stderr, stop it, and reuse recent commands. Available from the repository `...` menu, the repository context menu, and the Command Palette.
+- Settings `gitWorkspacePro.customCommand.historySize`, `.shell`, `.autoRefresh`, `.timeoutSeconds`.
+- Push and "Pull From Branch" use the branch's upstream remote, the only remote, or ask when several exist (previously always `origin`).
+- Settings `gitWorkspacePro.pullStrategy` (default `ask`), `history.maxCount` (default 300), `scan.excludeDirectories`, `scan.maxDepth`.
+- Commit details panel (ⓘ button in History): full message, author/committer, parents, per-file +/- stats, click a file to open its diff, copy hash.
+- Branch pickers for Checkout, Merge, and Rebase group local and remote branches; checking out a remote branch creates a tracking branch.
+- Commit asks to stage everything when nothing is staged, and says so when there is nothing to commit.
+- Hook rejections (pre-commit, commit-msg, husky, pre-push…) get a dedicated message.
+- Checkout, Merge, and Rebase warn about uncommitted changes and offer "Stash & Continue".
+
+### Changed
+- `@types/vscode` pinned to `1.90.0` so `vsce package` accepts the manifest; the untrusted-workspace capability no longer carries an unused description.
+- CI runs VS Code host smoke tests and builds a VSIX artifact.
+- Repository scanning no longer blocks the extension host on synchronous filesystem calls.
+
+### Fixed
+- Git commands no longer hang on credential prompts (`GIT_TERMINAL_PROMPT=0`) and always emit English messages so error classification works under any locale.
+- Timed-out Git processes are killed reliably (process tree on Windows, SIGKILL escalation elsewhere); runaway output is capped.
+- Ahead count for branches without an upstream only counts commits missing from every remote.
+- Commit diffs now work for merge commits (first-parent diff) and root commits.
+- Network failures have their own error code instead of being reported as a rejected push.
+- Invalid branch names are rejected up front; deleting a branch that is not merged now asks for an explicit "Force Delete".
+
 ## [0.3.0] - 2026-08-26
 
 ### Added
