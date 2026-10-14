@@ -33,6 +33,7 @@
   let prevCounts = new Map();
   let prevSummary = null;
   let lastSignature = "";
+  let stateVersion = 0;
   let commonBranch = "";
 
   function persist() {
@@ -199,10 +200,10 @@
     return best;
   }
 
-  function renderRepoList(nodes, isChild, keys) {
+  function renderRepoList(nodes, isChild, keys, labelClean) {
     const out = [];
     const cleanNodes = nodes.filter((node) => !node.repo.needsAttention);
-    const split = cleanNodes.length > 0 && cleanNodes.length < nodes.length;
+    const split = cleanNodes.length > 0 && (cleanNodes.length < nodes.length || labelClean === true);
     let labelled = false;
     for (const node of nodes) {
       if (split && !node.repo.needsAttention && !labelled) {
@@ -226,8 +227,12 @@
     summaryEl.replaceChildren(...chips);
   }
 
+  function signatureOf() {
+    return [stateVersion, ui.filter, [...ui.expanded].join("|"), [...ui.collapsedGroups].join("|"), [...busy].join("|"), [...selection.keys()].join("|"), [...ui.showAllFiles].join("|")].join("\u0001");
+  }
+
   function render() {
-    const signature = JSON.stringify([state, ui.filter, [...ui.expanded], [...ui.collapsedGroups], [...busy], [...selection.keys()], [...ui.showAllFiles]]);
+    const signature = signatureOf();
     if (signature === lastSignature) return;
     lastSignature = signature;
 
@@ -399,13 +404,19 @@
 
     if (changes > 0 && repo.counts.conflicted === 0) inner.append(renderCommitBox(repo));
 
+    // Nested repositories that have changes come first (they collapse to one row each),
+    // then this repository's own files, then the clean nested repositories.
+    const changedChildren = node.children.filter((child) => child.repo.needsAttention);
+    const cleanChildren = node.children.filter((child) => !child.repo.needsAttention);
+    inner.append(...renderRepoList(changedChildren, true, keys));
+
     for (const group of GROUPS) {
       const files = node.files.filter((file) => file.kind === group.kind);
       if (files.length === 0) continue;
       inner.append(renderGroup(repo, group, files, keys));
     }
 
-    inner.append(...renderRepoList(node.children, true, keys));
+    inner.append(...renderRepoList(cleanChildren, true, keys, true));
     body.append(inner);
   }
 
@@ -579,7 +590,7 @@
       const changes = node.repo.counts.staged + node.repo.counts.unstaged + node.repo.counts.untracked + node.repo.counts.conflicted;
       fillRepoBody(body, node, card, changes, new Set());
     });
-    lastSignature = JSON.stringify([state, ui.filter, [...ui.expanded], [...ui.collapsedGroups], [...busy], [...selection.keys()], [...ui.showAllFiles]]);
+    lastSignature = signatureOf();
   }
 
   function toggleGroup(groupId, el) {
@@ -589,7 +600,7 @@
     persist();
     el.querySelector(":scope > .group-head").setAttribute("aria-expanded", String(open));
     animateToggle(el, open, (body) => fillGroupBody(body, el._payload.repo, el._payload.group, el._payload.files));
-    lastSignature = JSON.stringify([state, ui.filter, [...ui.expanded], [...ui.collapsedGroups], [...busy], [...selection.keys()], [...ui.showAllFiles]]);
+    lastSignature = signatureOf();
   }
 
   function renderSelectionBar() {
@@ -800,6 +811,7 @@
     if (!message || typeof message.type !== "string") return;
     if (message.type === "state") {
       state = message.state;
+      stateVersion += 1;
       busy = new Set(message.busy || []);
       // drop selections that no longer exist
       const live = new Set();

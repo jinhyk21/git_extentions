@@ -37,6 +37,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   private readonly busy = new Set<string>();
   private fetching = false;
   private pushTimer: NodeJS.Timeout | undefined;
+  private lastPosted = "";
 
   public constructor(
     private readonly extensionUri: vscode.Uri,
@@ -56,7 +57,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     });
     view.onDidChangeVisibility(() => {
       if (view.visible) {
-        this.postState();
+        this.postState(true);
       }
     });
     view.onDidDispose(() => {
@@ -105,6 +106,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       return;
     }
 
+    this.lastPosted = "";
     const media = vscode.Uri.joinPath(this.extensionUri, "media", "sidebar");
     view.webview.html = getSidebarHtml(
       view.webview,
@@ -115,8 +117,20 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     );
   }
 
-  private postState(): void {
-    void this.view?.webview.postMessage({ type: "state", ...this.snapshot(), fetching: this.fetching });
+  /** Skips the post when nothing visible changed, so idle refreshes cost the webview nothing. */
+  private postState(force = false): void {
+    if (!this.view) {
+      return;
+    }
+
+    const payload = { type: "state", ...this.snapshot(), fetching: this.fetching };
+    const serialized = JSON.stringify(payload);
+    if (!force && serialized === this.lastPosted) {
+      return;
+    }
+
+    this.lastPosted = serialized;
+    void this.view.webview.postMessage(payload);
   }
 
   private findRepository(rootPath: string): RepositoryNode | undefined {
@@ -138,7 +152,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   private async handleMessage(message: SidebarMessage): Promise<void> {
     switch (message.type) {
       case "ready":
-        this.postState();
+        this.postState(true);
         return;
       case "refresh":
         await vscode.commands.executeCommand("gitWorkspacePro.refreshRepositories");

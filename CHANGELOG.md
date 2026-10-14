@@ -5,6 +5,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Changed
+- Performance: file-watcher events from `node_modules`, `.git`, build/cache directories and user-excluded folders are dropped before any work; status refreshes are coalesced per repository (debounce with a max wait, never two in flight); repository lookups are cached (about 6x faster under heavy event bursts); `git status` reads run in parallel (about 40% faster per refresh); the sidebar skips re-rendering when nothing visible changed.
+- Sidebar: nested repositories with changes are listed first inside a repository, then its own files, then clean nested repositories.
 - Sidebar: tighter spacing, larger icons and buttons, and hover actions that overlay the row instead of squeezing the repository name.
 - Sidebar ordering: repositories with conflicts or an operation first, then changes, then ahead/behind, clean last. Clean repositories are compact, dimmed rows under a "Clean repositories" label, and only show their branch when it differs from the most common one.
 - The "show clean repositories" control is now a labelled chip with the number of clean repositories.
