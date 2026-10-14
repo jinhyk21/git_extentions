@@ -4,6 +4,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-14
+
 ### Added
 - "Run Command" panel: type a multi-line command (Ctrl+Enter to run), run it in the selected repository (optional sub-directory), see streamed stdout/stderr, stop it, and reuse recent commands. Available from the repository `...` menu, the repository context menu, and the Command Palette.
 - Settings `gitWorkspacePro.customCommand.historySize`, `.shell`, `.autoRefresh`, `.timeoutSeconds`.
