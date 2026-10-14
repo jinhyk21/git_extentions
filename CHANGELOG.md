@@ -4,6 +4,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-10-14
+
 ### Changed
 - Performance: file-watcher events from `node_modules`, `.git`, build/cache directories and user-excluded folders are dropped before any work; status refreshes are coalesced per repository (debounce with a max wait, never two in flight); repository lookups are cached (about 6x faster under heavy event bursts); `git status` reads run in parallel (about 40% faster per refresh); the sidebar skips re-rendering when nothing visible changed.
 - Sidebar: nested repositories with changes are listed first inside a repository, then its own files, then clean nested repositories.
