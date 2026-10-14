@@ -6,6 +6,7 @@ import {
   MAX_COMMAND_LENGTH,
   resolveWorkingDirectory
 } from "../../core/shell/customCommandHelpers";
+import { AnsiParser } from "../../core/shell/AnsiParser";
 import { ShellCommandRunner, type ShellRunHandle } from "../../core/shell/ShellCommandRunner";
 import { getActiveLanguage, t } from "../localization";
 import { getCustomCommandHtml } from "./customCommandTemplate";
@@ -74,6 +75,16 @@ export class CustomCommandPanel {
     this.panel.webview.onDidReceiveMessage((message: unknown) => {
       if (isRunCommandMessage(message)) {
         void this.run(message.script, message.cwd, message.autoRefresh);
+      } else if (
+        typeof message === "object" &&
+        message !== null &&
+        "type" in message &&
+        message.type === "copyOutput" &&
+        "text" in message &&
+        typeof message.text === "string"
+      ) {
+        void vscode.env.clipboard.writeText(message.text);
+        vscode.window.showInformationMessage(t("Output copied."));
       } else if (typeof message === "object" && message !== null && "type" in message && message.type === "stop") {
         this.running?.stop();
       }
@@ -118,10 +129,17 @@ export class CustomCommandPanel {
     await this.showFirstRunNotice();
 
     this.post({ type: "started" });
+    // One parser per stream so colors and split escape sequences carry across chunks.
+    const parsers = { stdout: new AnsiParser(), stderr: new AnsiParser() };
     const handle = CustomCommandPanel.runner.start(
       script,
       resolved.directory,
-      (stream, text) => this.post({ type: "output", stream, text }),
+      (stream, text) => {
+        const segments = parsers[stream].feed(text);
+        if (segments.length > 0) {
+          this.post({ type: "output", stream, segments });
+        }
+      },
       {
         shell: config.get<string>("shell", ""),
         timeoutMs: config.get<number>("timeoutSeconds", 0) * 1000
@@ -133,7 +151,11 @@ export class CustomCommandPanel {
       const result = await handle.result;
       this.post({ type: "finished", ...result });
     } catch (error) {
-      this.post({ type: "output", stream: "stderr", text: `${error instanceof Error ? error.message : String(error)}\n` });
+      this.post({
+        type: "output",
+        stream: "stderr",
+        segments: [{ text: `${error instanceof Error ? error.message : String(error)}\n`, classes: "" }]
+      });
       this.post({ type: "finished", exitCode: null, signal: null, durationMs: 0, stopped: false, timedOut: false });
     } finally {
       this.running = undefined;

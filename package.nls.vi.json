@@ -46,5 +46,13 @@
   "config.pullStrategy.merge": "Tạo merge commit.",
   "config.history.maxCount": "Số commit tối đa được tải trong bảng Lịch sử.",
   "config.scan.excludeDirectories": "Tên thư mục bổ sung cần bỏ qua khi quét kho mã (ví dụ vendor, .venv, target). Mặc định: .git, node_modules, dist, out, .next, .turbo.",
-  "config.scan.maxDepth": "Độ sâu thư mục tối đa khi quét kho mã bên dưới mỗi workspace folder (0 = không giới hạn)."
+  "config.scan.maxDepth": "Độ sâu thư mục tối đa khi quét kho mã bên dưới mỗi workspace folder (0 = không giới hạn).",
+  "command.fetchAll": "Git Workspace Pro: Fetch tất cả kho",
+  "command.quickActions": "Git Workspace Pro: Thao tác nhanh cho kho hiện tại",
+  "command.focusSearch": "Git Workspace Pro: Tìm kiếm kho",
+  "command.commitWithMessage": "Git Workspace Pro: Commit kèm message",
+  "config.sidebar.mode": "Kiểu thanh bên. 'modern' là dạng thẻ; 'classic' là cây gốc của VS Code.",
+  "config.sidebar.mode.modern": "Thanh bên dạng thẻ với thao tác nhanh, tìm kiếm và hiệu ứng.",
+  "config.sidebar.mode.classic": "Cây gốc của VS Code.",
+  "config.sidebar.showCleanRepositories": "Hiển thị cả các kho sạch và đã đồng bộ trong thanh bên modern."
 }

@@ -4,7 +4,9 @@ Git Workspace Pro là tiện ích mở rộng VS Code để quản lý nhiều k
 
 ## Tính năng
 
-- **Cây kho lưu trữ tập trung**: Tự động quét và chỉ hiển thị các kho cần chú ý; kho sạch được ẩn, nhưng kho đang đồng bộ hoặc có operation vẫn được giữ
+- **Sidebar dạng thẻ (mới)**: Mỗi kho là một thẻ có nhánh, ahead/behind, số thay đổi; nút một chạm Resolve/Pull/Push, hộp commit ngay trong thẻ, chọn nhiều tệp để stage/unstage, tìm kiếm, menu chuột phải, điều hướng bàn phím, hiệu ứng mượt. Muốn quay lại cây VS Code gốc: đặt `gitWorkspacePro.sidebar.mode` = `classic`
+- **Cây kho lưu trữ tập trung**: Tự động quét và chỉ hiển thị các kho cần chú ý; kho sạch được ẩn (bật `gitWorkspacePro.sidebar.showCleanRepositories` để hiện), nhưng kho đang đồng bộ hoặc có operation vẫn được giữ
+- **Thanh trạng thái & phím tắt**: Nhánh và đồng bộ của kho hiện tại; `Ctrl+Alt+G` thao tác nhanh, `Ctrl+Alt+G F` fetch tất cả, `Ctrl+Alt+Shift+G` tìm kiếm kho
 - **Quản lý tệp**: Stage, unstage, discard, mở tệp, xem diff
 - **Thao tác Git**: Fetch, Pull, Pull từ nhánh khác, Push (tự động set upstream), Commit, Stage All, Unstage All
 - **Quản lý nhánh**: Checkout, Create, Merge, Rebase từ nhánh khác
@@ -37,6 +39,8 @@ Bạn cũng có thể đổi tại Settings bằng cấu hình `gitWorkspacePro.
 | Cấu hình | Mặc định | Mô tả |
 |----------|----------|-------|
 | `gitWorkspacePro.language` | `auto` | Ngôn ngữ giao diện |
+| `gitWorkspacePro.sidebar.mode` | `modern` | `modern` (thẻ) hoặc `classic` (cây VS Code gốc) |
+| `gitWorkspacePro.sidebar.showCleanRepositories` | `false` | Hiện cả kho sạch trong sidebar modern |
 | `gitWorkspacePro.pullStrategy` | `ask` | Cách Pull xử lý nhánh phân kỳ: `ask`, `ff-only`, `rebase`, `merge` |
 | `gitWorkspacePro.history.maxCount` | `300` | Số commit tối đa trong bảng Lịch sử |
 | `gitWorkspacePro.scan.excludeDirectories` | `[]` | Tên thư mục bỏ qua thêm khi quét kho (ví dụ `vendor`, `.venv`, `target`) |
@@ -63,7 +67,7 @@ Lưu ý: lệnh chạy không có terminal thật nên không nhập tương tá
 
 ### Cách 1: Cài từ file VSIX
 
-1. Tải file `git-workspace-pro-0.3.0.vsix` từ [Releases](https://github.com/jinhyk21/git_extentions/releases)
+1. Tải file `git-workspace-pro-0.5.2.vsix` từ [Releases](https://github.com/jinhyk21/git_extentions/releases)
 2. Mở VS Code
 3. Nhấn `Ctrl+Shift+P` (Windows/Linux) hoặc `Cmd+Shift+P` (macOS) để mở Command Palette
 4. Gõ `Extensions: Install from VSIX...` và chọn
@@ -73,7 +77,7 @@ Lưu ý: lệnh chạy không có terminal thật nên không nhập tương tá
 Hoặc cài bằng dòng lệnh:
 
 ```bash
-code --install-extension git-workspace-pro-0.3.0.vsix
+code --install-extension git-workspace-pro-0.5.2.vsix
 ```
 
 ### Cách 2: Build từ mã nguồn
@@ -107,7 +111,7 @@ vsce package --allow-missing-repository
 5. Cài file VSIX:
 
 ```bash
-code --install-extension git-workspace-pro-0.3.0.vsix
+code --install-extension git-workspace-pro-0.5.2.vsix
 ```
 
 ## Cách sử dụng

@@ -12,6 +12,10 @@ import { shouldShowRepository } from "./repositoryVisibility";
 import { CustomCommandPanel } from "./webview/CustomCommandPanel";
 import { ConflictResolutionPanel } from "./webview/ConflictResolutionPanel";
 import { HistoryPanel } from "./webview/HistoryPanel";
+import { SIDEBAR_VIEW_ID, SidebarProvider } from "./sidebar/SidebarProvider";
+import { RepositoryStatusBar } from "./sidebar/RepositoryStatusBar";
+import { RefreshScheduler } from "../core/util/RefreshScheduler";
+import { isNoisyPath } from "./watchFilter";
 
 export function activate(context: vscode.ExtensionContext): void {
   const repositoryManager = new RepositoryManager();
@@ -19,19 +23,40 @@ export function activate(context: vscode.ExtensionContext): void {
   const debugOutput = vscode.window.createOutputChannel("Git Workspace Pro (Debug)");
   context.subscriptions.push(debugOutput);
 
-  context.subscriptions.push(vscode.window.registerTreeDataProvider("gitWorkspacePro.repositories", treeProvider));
-  registerCommands(context, repositoryManager, () => treeProvider.refresh());
+  const sidebar = new SidebarProvider(context.extensionUri, repositoryManager);
+  const statusBar = new RepositoryStatusBar(repositoryManager);
+  const refreshViews = () => {
+    treeProvider.refresh();
+    sidebar.refresh();
+    statusBar.update();
+  };
+
   context.subscriptions.push(
+    vscode.window.registerTreeDataProvider("gitWorkspacePro.repositories", treeProvider),
+    vscode.window.registerWebviewViewProvider(SIDEBAR_VIEW_ID, sidebar, {
+      webviewOptions: { retainContextWhenHidden: true }
+    }),
+    statusBar
+  );
+  registerCommands(context, repositoryManager, refreshViews, { focusSidebarSearch: () => sidebar.focusSearch() });
+  context.subscriptions.push(
+    vscode.window.onDidChangeActiveTextEditor(() => statusBar.update()),
     vscode.workspace.onDidChangeConfiguration((event) => {
+      if (event.affectsConfiguration("gitWorkspacePro.sidebar.showCleanRepositories")) {
+        sidebar.refresh();
+      }
       if (
         event.affectsConfiguration("gitWorkspacePro.scan.excludeDirectories") ||
         event.affectsConfiguration("gitWorkspacePro.scan.maxDepth")
       ) {
         applyScanOptions();
+        readNoisyDirectories();
         void vscode.commands.executeCommand("gitWorkspacePro.refreshRepositories");
       }
       if (event.affectsConfiguration("gitWorkspacePro.language")) {
         treeProvider.refresh();
+        sidebar.reload();
+        statusBar.update();
         ConflictResolutionPanel.refreshOpenPanels();
         HistoryPanel.refreshOpenPanels();
       }
@@ -51,29 +76,26 @@ export function activate(context: vscode.ExtensionContext): void {
     const folders = vscode.workspace.workspaceFolders?.map((folder) => folder.uri.fsPath) ?? [];
     return repositoryManager.refresh(folders).then(() => {
       dumpRepositoryTreeForDebug(repositoryManager.getRepositories(), debugOutput);
-      treeProvider.refresh();
+      refreshViews();
     });
   };
 
   void rescanWorkspace();
 
-  // Per-repository debounce: editing repo A must never delay or repeat-trigger
-  // a status refresh for repo B, and must never re-scan the whole workspace.
-  const pendingStatusRefreshes = new Map<string, NodeJS.Timeout>();
-  const scheduleStatusRefresh = (repositoryRootPath: string) => {
-    const existing = pendingStatusRefreshes.get(repositoryRootPath);
-    if (existing) {
-      clearTimeout(existing);
-    }
-
-    pendingStatusRefreshes.set(
-      repositoryRootPath,
-      setTimeout(() => {
-        pendingStatusRefreshes.delete(repositoryRootPath);
-        void repositoryManager.refreshRepositoryStatus(repositoryRootPath).then(() => treeProvider.refresh());
-      }, 400)
+  // Per-repository scheduling: editing repo A must never delay or repeat-trigger a status
+  // refresh for repo B, never re-scan the whole workspace, and a burst of events (a build,
+  // a checkout) collapses into a few refreshes instead of one per file.
+  const statusScheduler = new RefreshScheduler(async (repositoryRootPath) => {
+    await repositoryManager.refreshRepositoryStatus(repositoryRootPath);
+    refreshViews();
+  });
+  let extraNoisyDirectories: ReadonlySet<string> = new Set();
+  const readNoisyDirectories = () => {
+    extraNoisyDirectories = new Set(
+      vscode.workspace.getConfiguration("gitWorkspacePro").get<string[]>("scan.excludeDirectories", [])
     );
   };
+  readNoisyDirectories();
 
   let rescanTimer: NodeJS.Timeout | undefined;
   const scheduleRescan = () => {
@@ -84,15 +106,16 @@ export function activate(context: vscode.ExtensionContext): void {
   };
 
   const onWorkspaceFileChanged = (uri: vscode.Uri) => {
-    // Ignore .git/ internals (index, logs, refs) — they churn on every git
-    // command and would otherwise re-trigger a refresh for our own operations.
-    if (/[/\\]\.git([/\\]|$)/.test(uri.fsPath)) {
+    // .git internals churn on every git command (including our own refreshes), and
+    // dependency/build/cache directories can emit thousands of events that never
+    // change what Git reports, so they are dropped before any lookup.
+    if (isNoisyPath(uri.fsPath, extraNoisyDirectories)) {
       return;
     }
 
     const repository = repositoryManager.findRepositoryForPath(uri.fsPath);
     if (repository) {
-      scheduleStatusRefresh(repository.rootPath);
+      statusScheduler.schedule(repository.rootPath);
     }
   };
 
@@ -109,10 +132,7 @@ export function activate(context: vscode.ExtensionContext): void {
         if (rescanTimer) {
           clearTimeout(rescanTimer);
         }
-        for (const timer of pendingStatusRefreshes.values()) {
-          clearTimeout(timer);
-        }
-        pendingStatusRefreshes.clear();
+        statusScheduler.dispose();
       }
     }
   );

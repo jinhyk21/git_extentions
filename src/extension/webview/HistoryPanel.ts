@@ -9,6 +9,8 @@ import { getHistoryHtml } from "./historyTemplate";
 type WebviewOutboundMessage =
   | { readonly type: "openCommitDiff"; readonly hash: string; readonly hasParent: boolean }
   | { readonly type: "showCommitDetails"; readonly hash: string }
+  | { readonly type: "copyHash"; readonly hash: string }
+  | { readonly type: "loadMore" }
   | { readonly type: "refresh" };
 
 function isWebviewOutboundMessage(value: unknown): value is WebviewOutboundMessage {
@@ -16,8 +18,12 @@ function isWebviewOutboundMessage(value: unknown): value is WebviewOutboundMessa
     return false;
   }
 
-  if (value.type === "refresh") {
+  if (value.type === "refresh" || value.type === "loadMore") {
     return true;
+  }
+
+  if (value.type === "copyHash") {
+    return "hash" in value && typeof value.hash === "string" && /^[0-9a-f]{7,64}$/i.test(value.hash);
   }
 
   if (value.type === "showCommitDetails") {
@@ -38,6 +44,7 @@ export class HistoryPanel {
 
   private readonly panel: vscode.WebviewPanel;
   private disposed = false;
+  private limit = 0;
 
   public static refreshOpenPanels(): void {
     for (const panel of HistoryPanel.openPanels.values()) {
@@ -89,16 +96,16 @@ export class HistoryPanel {
 
     try {
       this.panel.title = t("History: {repository}", { repository: this.repositoryName });
-      const commits = await this.repositoryManager.getLog(
-        this.repositoryRootPath,
-        vscode.workspace.getConfiguration("gitWorkspacePro").get<number>("history.maxCount", 300)
-      );
+      const pageSize = vscode.workspace.getConfiguration("gitWorkspacePro").get<number>("history.maxCount", 300);
+      this.limit = Math.max(this.limit, pageSize);
+      const commits = await this.repositoryManager.getLog(this.repositoryRootPath, this.limit);
       const graph = buildCommitGraph(commits);
       this.panel.webview.html = getHistoryHtml(
         this.panel.webview,
         this.repositoryName,
         graph,
-        getActiveLanguage()
+        getActiveLanguage(),
+        { hasMore: commits.length >= this.limit }
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -109,6 +116,18 @@ export class HistoryPanel {
   private async handleMessage(message: WebviewOutboundMessage): Promise<void> {
     if (message.type === "refresh") {
       await this.render();
+      return;
+    }
+
+    if (message.type === "loadMore") {
+      const pageSize = vscode.workspace.getConfiguration("gitWorkspacePro").get<number>("history.maxCount", 300);
+      this.limit = Math.min(this.limit + pageSize, 5000);
+      await this.render();
+      return;
+    }
+
+    if (message.type === "copyHash") {
+      await vscode.env.clipboard.writeText(message.hash);
       return;
     }
 

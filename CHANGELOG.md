@@ -4,6 +4,36 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-10-14
+
+### Fixed
+- Sidebar hover icons and row highlights no longer depend on the theme's toolbar/icon colors (some themes made them an orange patch with low-contrast icons); they are derived from the sidebar background and foreground only.
+
+## [0.5.1] - 2026-10-14
+
+### Changed
+- Performance: file-watcher events from `node_modules`, `.git`, build/cache directories and user-excluded folders are dropped before any work; status refreshes are coalesced per repository (debounce with a max wait, never two in flight); repository lookups are cached (about 6x faster under heavy event bursts); `git status` reads run in parallel (about 40% faster per refresh); the sidebar skips re-rendering when nothing visible changed.
+- Sidebar: nested repositories with changes are listed first inside a repository, then its own files, then clean nested repositories.
+- Sidebar: tighter spacing, larger icons and buttons, and hover actions that overlay the row instead of squeezing the repository name.
+- Sidebar ordering: repositories with conflicts or an operation first, then changes, then ahead/behind, clean last. Clean repositories are compact, dimmed rows under a "Clean repositories" label, and only show their branch when it differs from the most common one.
+- The "show clean repositories" control is now a labelled chip with the number of clean repositories.
+
+## [0.5.0] - 2026-10-14
+
+### Added
+- Redesigned sidebar (WebviewView): one card per repository with branch and sync badges, change counts, one-click Resolve / Pull / Push, hover quick actions (Fetch, History, Run Command, more), operation banner with Continue / Skip / Abort, inline commit box, collapsible file groups, multi-select stage/unstage, search, right-click menu, keyboard navigation, and animations that respect reduced-motion. The native tree is still available with `gitWorkspacePro.sidebar.mode = "classic"`.
+- Status bar entry for the active file's repository (branch, sync, warning on conflicts/operations); click for quick actions.
+- Commands and keybindings: Fetch All (`Ctrl+Alt+G F`), Quick Actions (`Ctrl+Alt+G`), Search Repositories (`Ctrl+Alt+Shift+G`); setting `sidebar.showCleanRepositories`.
+- History: search (message, author, hash, branch) with highlighting, author avatars, relative dates, copy hash, Load more, keyboard navigation.
+- Run Command: ANSI colors, live timer, status pill, follow-output toggle, copy output, recent-command chips.
+- Commit details: author header, change bars per file, file filter.
+
+### Changed
+- After file actions and Git operations only the affected repository (and its parents) is refreshed instead of rescanning the workspace; git status loads run at most 4 at a time.
+- Conflict editor: motion, focus rings and depth polish (layout and behavior unchanged).
+
+## [0.4.0] - 2026-10-14
+
 ### Added
 - "Run Command" panel: type a multi-line command (Ctrl+Enter to run), run it in the selected repository (optional sub-directory), see streamed stdout/stderr, stop it, and reuse recent commands. Available from the repository `...` menu, the repository context menu, and the Command Palette.
 - Settings `gitWorkspacePro.customCommand.historySize`, `.shell`, `.autoRefresh`, `.timeoutSeconds`.

@@ -7,11 +7,14 @@ import type {
 } from "../../shared/types/repository";
 import type { CommitDetails, CommitLogEntry } from "../../shared/types/history";
 import { GitAdapter } from "../git/GitAdapter";
+import { createLimiter } from "../util/createLimiter";
 import { RepositoryScanner, type ScanOptions } from "./RepositoryScanner";
 
 export class RepositoryManager {
   private repositories: readonly RepositoryNode[] = [];
   private scanOptions: ScanOptions = {};
+  private readonly limitStatusLoad = createLimiter(4);
+  private flatCache: RepositoryNode[] | undefined;
 
   public constructor(
     private readonly scanner = new RepositoryScanner(),
@@ -20,7 +23,7 @@ export class RepositoryManager {
 
   public async refresh(workspaceFolders: readonly string[]): Promise<readonly RepositoryNode[]> {
     const repositories = await this.scanner.scan(workspaceFolders, this.scanOptions);
-    this.repositories = await Promise.all(repositories.map((repository) => this.loadStatusRecursive(repository)));
+    this.setRepositories(await Promise.all(repositories.map((repository) => this.loadStatusRecursive(repository))));
     return this.repositories;
   }
 
@@ -40,9 +43,21 @@ export class RepositoryManager {
       statusError = error instanceof Error ? error.message : String(error);
     }
 
-    this.repositories = this.repositories.map((repository) =>
-      this.applyStatus(repository, repositoryPath, status, statusError)
+    this.setRepositories(
+      this.repositories.map((repository) => this.applyStatus(repository, repositoryPath, status, statusError))
     );
+  }
+
+  /**
+   * Refreshes one repository plus every repository that contains it (a nested
+   * repository shows up as a change in its parent), without rescanning the
+   * filesystem or touching unrelated repositories.
+   */
+  public async refreshRepositoryAndAncestors(repositoryPath: string): Promise<void> {
+    const targets = this.flatRepositories()
+      .map((repository) => repository.rootPath)
+      .filter((root) => repositoryPath === root || repositoryPath.startsWith(`${root}${path.sep}`));
+    await Promise.all((targets.length > 0 ? targets : [repositoryPath]).map((root) => this.refreshRepositoryStatus(root)));
   }
 
   private applyStatus(
@@ -66,11 +81,21 @@ export class RepositoryManager {
   }
 
   public findRepositoryForPath(filePath: string): RepositoryNode | undefined {
-    const candidates = this.flatten(this.repositories).filter(
+    // The flattened list is cached and sorted deepest-first: file watcher events call this
+    // thousands of times during a build, so it must not rebuild the list every time.
+    return this.flatRepositories().find(
       (repository) => filePath === repository.rootPath || filePath.startsWith(`${repository.rootPath}${path.sep}`)
     );
+  }
 
-    return candidates.sort((left, right) => right.rootPath.length - left.rootPath.length)[0];
+  private setRepositories(repositories: readonly RepositoryNode[]): void {
+    this.repositories = repositories;
+    this.flatCache = undefined;
+  }
+
+  private flatRepositories(): RepositoryNode[] {
+    this.flatCache ??= this.flatten(this.repositories).sort((left, right) => right.rootPath.length - left.rootPath.length);
+    return this.flatCache;
   }
 
   private flatten(repositories: readonly RepositoryNode[]): RepositoryNode[] {
@@ -249,7 +274,7 @@ export class RepositoryManager {
       return {
         ...repository,
         children,
-        status: await this.gitAdapter.getStatus(repository.rootPath),
+        status: await this.limitStatusLoad(() => this.gitAdapter.getStatus(repository.rootPath)),
         statusError: undefined
       };
     } catch (error) {

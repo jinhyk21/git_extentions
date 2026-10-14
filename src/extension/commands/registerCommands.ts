@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import path from "node:path";
 import type { RepositoryManager } from "../../core/repository/RepositoryManager";
 import type { GitOperationType, PullStrategy } from "../../shared/types/repository";
+import { createLimiter } from "../../core/util/createLimiter";
 import { ErrorCodes } from "../../shared/constants/errorCodes";
 import { GitWorkspaceError } from "../../core/errors/GitWorkspaceError";
 import { getLanguagePreference, t } from "../localization";
@@ -24,7 +25,8 @@ const runningRepositories = new Set<string>();
 export function registerCommands(
   context: vscode.ExtensionContext,
   repositoryManager: RepositoryManager,
-  refreshTree: () => void
+  refreshTree: () => void,
+  hooks: { readonly focusSidebarSearch?: () => void } = {}
 ): void {
   context.subscriptions.push(
     vscode.commands.registerCommand("gitWorkspacePro.refreshRepositories", async () => {
@@ -68,8 +70,36 @@ export function registerCommands(
       }
 
       await ConflictResolutionPanel.open(repositoryManager, node.repository.rootPath, node.file.path, () =>
-        refreshWorkspace(repositoryManager, refreshTree)
+        refreshWorkspace(repositoryManager, refreshTree, node.repository.rootPath)
       );
+    }),
+    vscode.commands.registerCommand(
+      "gitWorkspacePro.commitWithMessage",
+      async (target?: { readonly rootPath?: unknown; readonly message?: unknown }): Promise<boolean> => {
+        if (typeof target?.rootPath !== "string" || typeof target.message !== "string") {
+          return false;
+        }
+
+        const repository = repositoryManager.findRepositoryForPath(target.rootPath);
+        if (!repository || repository.rootPath !== target.rootPath) {
+          return false;
+        }
+
+        return commitRepository(repositoryManager, refreshTree, repository, target.message);
+      }
+    ),
+    vscode.commands.registerCommand("gitWorkspacePro.quickActions", async () => {
+      const filePath = vscode.window.activeTextEditor?.document.uri.fsPath;
+      const repository = filePath ? repositoryManager.findRepositoryForPath(filePath) : undefined;
+      // Without a repository for the active file, showRepositoryActions asks which one.
+      await vscode.commands.executeCommand("gitWorkspacePro.showRepositoryActions", repository);
+    }),
+    vscode.commands.registerCommand("gitWorkspacePro.focusSearch", async () => {
+      await vscode.commands.executeCommand("workbench.view.extension.gitWorkspacePro");
+      hooks.focusSidebarSearch?.();
+    }),
+    vscode.commands.registerCommand("gitWorkspacePro.fetchAll", async () => {
+      await fetchAllRepositories(repositoryManager, refreshTree);
     }),
     vscode.commands.registerCommand("gitWorkspacePro.runCustomCommand", async (node?: RepositoryCommandNode) => {
       const repository = isRepositoryCommandNode(node)
@@ -108,7 +138,7 @@ export function registerCommands(
         const filePaths = repositoryNodes.map((entry) => entry.file.path);
 
         await repositoryManager.stageFile(repository.rootPath, filePaths);
-        await refreshWorkspace(repositoryManager, refreshTree);
+        await refreshWorkspace(repositoryManager, refreshTree, repository.rootPath);
       }
     ),
     vscode.commands.registerCommand("gitWorkspacePro.unstageFile", async (node: ChangedFileCommandNode) => {
@@ -117,7 +147,7 @@ export function registerCommands(
       }
 
       await repositoryManager.unstageFile(node.repository.rootPath, node.file.path);
-      await refreshWorkspace(repositoryManager, refreshTree);
+      await refreshWorkspace(repositoryManager, refreshTree, node.repository.rootPath);
     }),
     vscode.commands.registerCommand("gitWorkspacePro.discardFile", async (node: ChangedFileCommandNode) => {
       if (!isChangedFileCommandNode(node)) {
@@ -142,7 +172,7 @@ export function registerCommands(
       } else {
         await repositoryManager.discardFile(node.repository.rootPath, node.file.path);
       }
-      await refreshWorkspace(repositoryManager, refreshTree);
+      await refreshWorkspace(repositoryManager, refreshTree, node.repository.rootPath);
     }),
     vscode.commands.registerCommand("gitWorkspacePro.showRepositoryActions", async (node: RepositoryCommandNode | ActionMenuCommandNode) => {
       const repository =
@@ -355,7 +385,21 @@ export function registerCommands(
   );
 }
 
-async function refreshWorkspace(repositoryManager: RepositoryManager, refreshTree: () => void): Promise<void> {
+/**
+ * Pass `repositoryPath` when the action only touched one repository: that
+ * refreshes just it (and its parents) instead of rescanning the whole workspace.
+ */
+async function refreshWorkspace(
+  repositoryManager: RepositoryManager,
+  refreshTree: () => void,
+  repositoryPath?: string
+): Promise<void> {
+  if (repositoryPath) {
+    await repositoryManager.refreshRepositoryAndAncestors(repositoryPath);
+    refreshTree();
+    return;
+  }
+
   const folders = vscode.workspace.workspaceFolders?.map((folder) => folder.uri.fsPath) ?? [];
   await repositoryManager.refresh(folders);
   refreshTree();
@@ -533,12 +577,12 @@ async function runRepositoryOperation(
   operationName: string,
   repository: RepositoryCommandNode,
   operation: () => Promise<void>
-): Promise<void> {
+): Promise<boolean> {
   if (runningRepositories.has(repository.rootPath)) {
     vscode.window.showWarningMessage(
       t("Another Git operation is already running in {repository}.", { repository: repository.name })
     );
-    return;
+    return false;
   }
   runningRepositories.add(repository.rootPath);
 
@@ -550,10 +594,11 @@ async function runRepositoryOperation(
       },
       operation
     );
-    await refreshWorkspace(repositoryManager, refreshTree);
+    await refreshWorkspace(repositoryManager, refreshTree, repository.rootPath);
+    return true;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    await refreshWorkspace(repositoryManager, refreshTree);
+    await refreshWorkspace(repositoryManager, refreshTree, repository.rootPath);
     const refreshedRepository = repositoryManager.findRepositoryForPath(repository.rootPath);
     const firstConflict = refreshedRepository?.status?.files.find((file) => file.kind === "conflicted");
     if (refreshedRepository && firstConflict) {
@@ -566,10 +611,10 @@ async function runRepositoryOperation(
           repositoryManager,
           refreshedRepository.rootPath,
           firstConflict.path,
-          () => refreshWorkspace(repositoryManager, refreshTree)
+          () => refreshWorkspace(repositoryManager, refreshTree, refreshedRepository.rootPath)
         );
       }
-      return;
+      return false;
     }
 
     vscode.window.showErrorMessage(
@@ -577,6 +622,7 @@ async function runRepositoryOperation(
         ? t("{operation} was rejected by a Git hook: {message}", { operation: operationName, message })
         : t("{operation} failed: {message}", { operation: operationName, message })
     );
+    return false;
   } finally {
     runningRepositories.delete(repository.rootPath);
   }
@@ -611,12 +657,12 @@ async function pushRepository(
         pushOutput = await repositoryManager.push(repository.rootPath, remote);
       }
     );
-    await refreshWorkspace(repositoryManager, refreshTree);
+    await refreshWorkspace(repositoryManager, refreshTree, repository.rootPath);
     await showMergeRequestLinkIfPresent(repositoryManager, repository, pushOutput, remote);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     vscode.window.showErrorMessage(t("{operation} failed: {message}", { operation: t("Push"), message }));
-    await refreshWorkspace(repositoryManager, refreshTree);
+    await refreshWorkspace(repositoryManager, refreshTree, repository.rootPath);
   } finally {
     runningRepositories.delete(repository.rootPath);
   }
@@ -897,8 +943,9 @@ async function stashPop(
 async function commitRepository(
   repositoryManager: RepositoryManager,
   refreshTree: () => void,
-  repository: RepositoryCommandNode
-): Promise<void> {
+  repository: RepositoryCommandNode,
+  presetMessage?: string
+): Promise<boolean> {
   let stageAllFirst = false;
   // During a merge/rebase/cherry-pick the commit may legitimately have nothing newly staged.
   if (!repository.status?.operation) {
@@ -906,13 +953,13 @@ async function commitRepository(
     const counts = (repositoryManager.findRepositoryForPath(repository.rootPath) ?? repository).status?.counts;
     if (counts && counts.conflicted > 0) {
       vscode.window.showWarningMessage(t("Resolve and stage every conflicted file before continuing."));
-      return;
+      return false;
     }
 
     if (counts && counts.staged === 0) {
       if (counts.unstaged + counts.untracked === 0) {
         vscode.window.showInformationMessage(t("Nothing to commit in {repository}.", { repository: repository.name }));
-        return;
+        return false;
       }
 
       const stageAllLabel = t("Stage All & Commit");
@@ -922,24 +969,26 @@ async function commitRepository(
         stageAllLabel
       );
       if (answer !== stageAllLabel) {
-        return;
+        return false;
       }
       stageAllFirst = true;
     }
   }
 
-  const message = await vscode.window.showInputBox({
+  const message =
+    presetMessage?.trim() ||
+    (await vscode.window.showInputBox({
     title: t("Commit {repository}", { repository: repository.name }),
     prompt: t("Commit message"),
     ignoreFocusOut: true,
     validateInput: (value) => (value.trim().length === 0 ? t("Commit message is required") : undefined)
-  });
+  }));
 
   if (!message) {
-    return;
+    return false;
   }
 
-  await runRepositoryOperation(repositoryManager, refreshTree, t("Commit"), repository, async () => {
+  return runRepositoryOperation(repositoryManager, refreshTree, t("Commit"), repository, async () => {
     if (stageAllFirst) {
       await repositoryManager.stageAll(repository.rootPath);
     }
@@ -1322,4 +1371,61 @@ async function pickRemote(
     placeHolder: t("Choose the remote to use")
   });
   return selected;
+}
+
+/** Fetches every repository (a few at a time) and reports the ones that failed. */
+async function fetchAllRepositories(repositoryManager: RepositoryManager, refreshTree: () => void): Promise<void> {
+  const repositories: RepositoryCommandNode[] = [];
+  const visit = (nodes: readonly RepositoryCommandNode[]) => {
+    for (const node of nodes) {
+      repositories.push(node);
+      visit(node.children);
+    }
+  };
+  visit(repositoryManager.getRepositories());
+
+  if (repositories.length === 0) {
+    vscode.window.showWarningMessage(t("No Git repositories found in the workspace."));
+    return;
+  }
+
+  const limit = createLimiter(3);
+  const failures: string[] = [];
+  let done = 0;
+
+  await vscode.window.withProgress(
+    { location: vscode.ProgressLocation.Notification, title: t("Fetch All"), cancellable: false },
+    async (progress) => {
+      await Promise.all(
+        repositories.map((repository) =>
+          limit(async () => {
+            if (runningRepositories.has(repository.rootPath)) {
+              return;
+            }
+
+            try {
+              await repositoryManager.fetch(repository.rootPath);
+            } catch (error) {
+              failures.push(`${repository.name}: ${error instanceof Error ? error.message : String(error)}`);
+            } finally {
+              done += 1;
+              progress.report({
+                message: `${done}/${repositories.length}`,
+                increment: 100 / repositories.length
+              });
+            }
+          })
+        )
+      );
+    }
+  );
+
+  await refreshWorkspace(repositoryManager, refreshTree);
+  if (failures.length > 0) {
+    vscode.window.showErrorMessage(
+      t("Fetch failed for {count} repositories: {details}", { count: failures.length, details: failures.join("; ") })
+    );
+  } else {
+    vscode.window.showInformationMessage(t("Fetched {count} repositories.", { count: repositories.length }));
+  }
 }

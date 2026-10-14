@@ -16,6 +16,9 @@ import { GitProcessRunner, type GitProcessResult } from "./GitProcessRunner";
 import { parseGitStatus } from "./parseGitStatus";
 
 export class GitAdapter {
+  /** The git directory of a working tree never moves, so resolve it once per repository. */
+  private readonly gitDirectories = new Map<string, string>();
+
   public constructor(private readonly runner = new GitProcessRunner()) {}
 
   private async exec(args: readonly string[], cwd: string, timeoutMs?: number): Promise<GitProcessResult> {
@@ -33,15 +36,18 @@ export class GitAdapter {
   }
 
   public async getStatus(path: string): Promise<RepositoryStatusSummary> {
-    const branchResult = await this.exec(["branch", "--show-current"], path, 5_000);
-    const statusResult = await this.exec(["status", "--porcelain=v1", "-z", "--branch"], path, 10_000);
+    // Independent reads run concurrently: refreshes are latency-bound, not CPU-bound.
+    const [branchResult, statusResult, operation] = await Promise.all([
+      this.exec(["branch", "--show-current"], path, 5_000),
+      this.exec(["status", "--porcelain=v1", "-z", "--branch"], path, 10_000),
+      this.getOperationState(path)
+    ]);
 
     if (statusResult.exitCode !== 0) {
       throw this.toGitError(statusResult.stderr, "Repository status failed");
     }
 
     const { hasUpstream, ...summary } = parseGitStatus(branchResult.stdout.trim() || "DETACHED", statusResult.stdout);
-    const operation = await this.getOperationState(path);
     if (hasUpstream) {
       return operation ? { ...summary, operation } : summary;
     }
@@ -367,12 +373,17 @@ export class GitAdapter {
   }
 
   public async getOperationState(repositoryPath: string): Promise<GitOperationState | undefined> {
-    const gitDirectoryResult = await this.exec(["rev-parse", "--absolute-git-dir"], repositoryPath, 5_000);
-    if (gitDirectoryResult.exitCode !== 0) {
-      return undefined;
+    let gitDirectory = this.gitDirectories.get(repositoryPath);
+    if (!gitDirectory) {
+      const gitDirectoryResult = await this.exec(["rev-parse", "--absolute-git-dir"], repositoryPath, 5_000);
+      if (gitDirectoryResult.exitCode !== 0) {
+        return undefined;
+      }
+
+      gitDirectory = gitDirectoryResult.stdout.trim();
+      this.gitDirectories.set(repositoryPath, gitDirectory);
     }
 
-    const gitDirectory = gitDirectoryResult.stdout.trim();
     const rebaseMergeDirectory = path.join(gitDirectory, "rebase-merge");
     const rebaseApplyDirectory = path.join(gitDirectory, "rebase-apply");
 

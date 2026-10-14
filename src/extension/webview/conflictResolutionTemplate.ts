@@ -419,6 +419,26 @@ export function getConflictResolutionHtml(webview: Webview, data: ConflictEditor
     .toolbar-label,
     .operation-meta { display: none; }
   }
+  /* ---- polish: motion, focus and depth (visual only; layout and ids are unchanged) ---- */
+  :root { --ease: cubic-bezier(0.2, 0.8, 0.2, 1); }
+  body { animation: gwp-fade 240ms var(--ease) both; }
+  button {
+    border-radius: 6px;
+    transition: background 140ms, border-color 140ms, transform 90ms, box-shadow 160ms, filter 140ms;
+  }
+  button:active:not(:disabled) { transform: scale(0.96); }
+  button:focus-visible, select:focus-visible { outline: 1px solid var(--vscode-focusBorder, #0078d4); outline-offset: 1px; }
+  button.primary { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35); }
+  button.primary:hover:not(:disabled) { box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4); filter: brightness(1.06); }
+  select { border-radius: 6px; transition: border-color 140ms, box-shadow 140ms; }
+  .titlebar, .merge-toolbar { box-shadow: 0 1px 0 rgba(0, 0, 0, 0.15); }
+  .titlebar strong { letter-spacing: 0.01em; }
+  .merge-toolbar { scrollbar-width: thin; }
+  .code-cell, .context-cell, .gutter-cell { transition: background-color 180ms ease; }
+  @keyframes gwp-fade { from { opacity: 0; } to { opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 1ms !important; transition-duration: 1ms !important; }
+  }
 </style>
 </head>
 <body>
