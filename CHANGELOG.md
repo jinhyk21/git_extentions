@@ -4,6 +4,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-10-14
+
 ### Fixed
 - Sidebar hover icons and row highlights no longer depend on the theme's toolbar/icon colors (some themes made them an orange patch with low-contrast icons); they are derived from the sidebar background and foreground only.
 
