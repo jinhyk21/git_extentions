@@ -63,7 +63,8 @@ export class CustomCommandPanel {
       repository.name,
       this.readHistory(),
       config.get<boolean>("autoRefresh", true),
-      getActiveLanguage()
+      getActiveLanguage(),
+      repository.rootPath
     );
 
     this.panel.onDidDispose(() => {

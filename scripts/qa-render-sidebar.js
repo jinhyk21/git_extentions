@@ -112,6 +112,7 @@ function main() {
         const repoHead = $$(".card-head")[0];
         repoHead.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, clientX: 40, clientY: 40 }));
         out.menu = document.querySelectorAll("#menu button").length;
+        out.menuLabels = [...document.querySelectorAll("#menu button")].map((b) => b.textContent).join("|");
         document.documentElement.setAttribute("data-result", JSON.stringify(out));
       }, 400);
     }, 300));`;
@@ -132,7 +133,7 @@ function main() {
     check("bulk stage posts one command with both files", out.bulkStage === "[2]", out.bulkStage);
     check("search filters repositories", out.filtered === 1, `cards=${out.filtered}`);
     check("clean repositories render compact under a section label", out.compact === 8 && out.sectionLabel === true, `compact=${out.compact} label=${out.sectionLabel}`);
-    check("context menu lists repository actions", out.menu >= 8, `buttons=${out.menu}`);
+    check("context menu lists every repository action including Pull From Branch", out.menu >= 18 && /Pull From Branch/.test(out.menuLabels) && /Merge Branch/.test(out.menuLabels) && /Stash Pop/.test(out.menuLabels), `buttons=${out.menu} ${out.menuLabels}`);
   }
 
   rmSync(dir, { recursive: true, force: true });

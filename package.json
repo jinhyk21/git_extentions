@@ -2,7 +2,7 @@
   "name": "git-workspace-pro",
   "displayName": "Git Workspace Pro",
   "description": "%extension.description%",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "author": "Ninh Ngọc Tuấn",
   "publisher": "jinhy",
   "license": "MIT",
@@ -396,6 +396,76 @@
           "command": "gitWorkspacePro.showHistory",
           "when": "view == gitWorkspacePro.repositories && viewItem == repository",
           "group": "inline@7"
+        },
+        {
+          "command": "gitWorkspacePro.showHistory",
+          "when": "view == gitWorkspacePro.repositories && viewItem == repository",
+          "group": "4_tools@1"
+        },
+        {
+          "command": "gitWorkspacePro.fetch",
+          "when": "view == gitWorkspacePro.repositories && viewItem == repository",
+          "group": "1_sync@1"
+        },
+        {
+          "command": "gitWorkspacePro.pull",
+          "when": "view == gitWorkspacePro.repositories && viewItem == repository",
+          "group": "1_sync@2"
+        },
+        {
+          "command": "gitWorkspacePro.pullBranch",
+          "when": "view == gitWorkspacePro.repositories && viewItem == repository",
+          "group": "1_sync@3"
+        },
+        {
+          "command": "gitWorkspacePro.push",
+          "when": "view == gitWorkspacePro.repositories && viewItem == repository",
+          "group": "1_sync@4"
+        },
+        {
+          "command": "gitWorkspacePro.checkoutBranch",
+          "when": "view == gitWorkspacePro.repositories && viewItem == repository",
+          "group": "2_branch@1"
+        },
+        {
+          "command": "gitWorkspacePro.createBranch",
+          "when": "view == gitWorkspacePro.repositories && viewItem == repository",
+          "group": "2_branch@2"
+        },
+        {
+          "command": "gitWorkspacePro.mergeBranch",
+          "when": "view == gitWorkspacePro.repositories && viewItem == repository",
+          "group": "2_branch@3"
+        },
+        {
+          "command": "gitWorkspacePro.rebaseBranch",
+          "when": "view == gitWorkspacePro.repositories && viewItem == repository",
+          "group": "2_branch@4"
+        },
+        {
+          "command": "gitWorkspacePro.commit",
+          "when": "view == gitWorkspacePro.repositories && viewItem == repository",
+          "group": "3_changes@1"
+        },
+        {
+          "command": "gitWorkspacePro.stageAll",
+          "when": "view == gitWorkspacePro.repositories && viewItem == repository",
+          "group": "3_changes@2"
+        },
+        {
+          "command": "gitWorkspacePro.unstageAll",
+          "when": "view == gitWorkspacePro.repositories && viewItem == repository",
+          "group": "3_changes@3"
+        },
+        {
+          "command": "gitWorkspacePro.stashPush",
+          "when": "view == gitWorkspacePro.repositories && viewItem == repository",
+          "group": "3_changes@4"
+        },
+        {
+          "command": "gitWorkspacePro.stashPop",
+          "when": "view == gitWorkspacePro.repositories && viewItem == repository",
+          "group": "3_changes@5"
         },
         {
           "command": "gitWorkspacePro.runCustomCommand",

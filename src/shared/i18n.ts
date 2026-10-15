@@ -287,7 +287,8 @@ const vi: Record<string, string> = {
   "Output copied.": "Đã sao chép output.",
   "Filter files…": "Lọc tệp…",
   "{count} clean": "{count} sạch",
-  "Clean repositories ({count})": "Kho sạch ({count})"
+  "Clean repositories ({count})": "Kho sạch ({count})",
+  "Runs in": "Chạy tại"
 };
 
 const zhCn: Record<string, string> = {
@@ -575,7 +576,8 @@ const zhCn: Record<string, string> = {
   "Output copied.": "已复制输出。",
   "Filter files…": "筛选文件…",
   "{count} clean": "{count} 个干净",
-  "Clean repositories ({count})": "干净仓库（{count}）"
+  "Clean repositories ({count})": "干净仓库（{count}）",
+  "Runs in": "运行位置"
 };
 
 export function resolveLanguage(preference: LanguagePreference, vscodeLanguage: string): AppLanguage {

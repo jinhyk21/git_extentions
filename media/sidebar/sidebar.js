@@ -638,19 +638,31 @@
   /* ---------- context menu ---------- */
   const menuEl = document.getElementById("menu");
 
+  /** Every repository action, grouped: sync, branches, changes, tools. */
   function repoMenu(repo) {
+    const go = (command) => () => run(command, repo.id);
     return [
-      [tr("Fetch"), "fetch", () => run("gitWorkspacePro.fetch", repo.id)],
-      [tr("Pull"), "pull", () => run("gitWorkspacePro.pull", repo.id)],
-      [tr("Push"), "push", () => run("gitWorkspacePro.push", repo.id)],
+      [tr("Fetch"), "fetch", go("gitWorkspacePro.fetch")],
+      [tr("Pull"), "pull", go("gitWorkspacePro.pull")],
+      [tr("Pull From Branch"), "pull", go("gitWorkspacePro.pullBranch")],
+      [tr("Push"), "push", go("gitWorkspacePro.push")],
       null,
-      [tr("Stage All"), "plus", () => run("gitWorkspacePro.stageAll", repo.id)],
-      [tr("Unstage All"), "minus", () => run("gitWorkspacePro.unstageAll", repo.id)],
-      [tr("Stash Push"), "stash", () => run("gitWorkspacePro.stashPush", repo.id)],
+      [tr("Checkout Branch"), "branch", go("gitWorkspacePro.checkoutBranch")],
+      [tr("Create Branch"), "branch", go("gitWorkspacePro.createBranch")],
+      [tr("Merge Branch"), "branch", go("gitWorkspacePro.mergeBranch")],
+      [tr("Rebase Onto Branch"), "branch", go("gitWorkspacePro.rebaseBranch")],
+      [tr("Delete Branch"), "discard", go("gitWorkspacePro.deleteBranch")],
       null,
-      [tr("Show History"), "history", () => run("gitWorkspacePro.showHistory", repo.id)],
-      [tr("Run Command"), "terminal", () => run("gitWorkspacePro.runCustomCommand", repo.id)],
-      [tr("Repository Actions"), "more", () => run("gitWorkspacePro.showRepositoryActions", repo.id)]
+      [tr("Commit"), "commit", go("gitWorkspacePro.commit")],
+      [tr("Stage All"), "plus", go("gitWorkspacePro.stageAll")],
+      [tr("Unstage All"), "minus", go("gitWorkspacePro.unstageAll")],
+      [tr("Stash Push"), "stash", go("gitWorkspacePro.stashPush")],
+      [tr("Stash Pop"), "stash", go("gitWorkspacePro.stashPop")],
+      [tr("Restore All"), "discard", go("gitWorkspacePro.restoreAll")],
+      null,
+      [tr("Show History"), "history", go("gitWorkspacePro.showHistory")],
+      [tr("Run Command"), "terminal", go("gitWorkspacePro.runCustomCommand")],
+      [tr("Repository Actions"), "more", go("gitWorkspacePro.showRepositoryActions")]
     ];
   }
 

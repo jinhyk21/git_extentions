@@ -37,4 +37,11 @@ describe("[UI/UX] custom command webview", () => {
       assert.deepStrictEqual(missing, [], `${language} is missing translations`);
     }
   });
+
+  it("shows the repository path the command will run in", () => {
+    const withPath = getCustomCommandHtml(webview, "repo", [], true, "en", "/work/my-repo");
+
+    assert.match(withPath, /"repositoryPath":"\/work\/my-repo"/);
+    assert.match(withPath, /id="wherePath"/);
+  });
 });

@@ -4,6 +4,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.5.3] - 2026-10-14
+
+### Added
+- Right-clicking a repository now offers every action directly (Pull From Branch, Checkout/Create/Merge/Rebase/Delete Branch, Commit, Stash Pop, Restore All…), grouped by sync, branches, changes and tools; the classic tree's context menu gained the same entries.
+- Run Command shows the full path the command will run in (header and working-directory placeholder).
+
 ## [0.5.2] - 2026-10-14
 
 ### Fixed
