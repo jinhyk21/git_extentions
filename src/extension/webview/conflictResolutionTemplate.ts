@@ -52,7 +52,7 @@ export function getConflictResolutionHtml(webview: Webview, data: ConflictEditor
     --radius-sm: 6px;
     --mono: var(--vscode-editor-font-family, "JetBrains Mono", Consolas, monospace);
     --mono-size: var(--vscode-editor-font-size, 13px);
-    --columns: minmax(0, 1fr) 52px minmax(0, 1.15fr) 52px minmax(0, 1fr);
+    --columns: minmax(0, 1fr) 72px minmax(0, 1.15fr) 72px minmax(0, 1fr);
   }
   * { box-sizing: border-box; }
   html, body { height: 100%; }
@@ -155,7 +155,7 @@ export function getConflictResolutionHtml(webview: Webview, data: ConflictEditor
     border-radius: var(--radius);
     background: var(--bg);
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.22); scrollbar-color: color-mix(in srgb, var(--muted) 60%, transparent) transparent; }
-  .merge-surface { min-width: 900px; }
+  .merge-surface { min-width: 960px; }
   .column-headers {
     position: sticky;
     top: 0;
@@ -680,6 +680,39 @@ export function getConflictResolutionHtml(webview: Webview, data: ConflictEditor
   .context-panes .line-numbers { background: transparent; border-right-color: transparent; }
   .context-panes .result-cell { border: 0; }
   .column-header.result { border-left: 0; border-right: 0; }
+
+  /* ---- fix v5: gutter buttons fit their column; readable placeholder; quiet scrollbars ---- */
+  .action-gutter {
+    min-width: 0;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 6px;
+    padding: calc(var(--strip) + 8px) 0 8px;
+  }
+  .context-panes .action-gutter { padding: 0; }
+  .hunk-action {
+    flex: 0 0 auto;
+    box-sizing: border-box;
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    min-height: 32px;
+    aspect-ratio: 1 / 1;
+    padding: 0;
+    border-radius: 50%;
+    font-size: 18px;
+    line-height: 1;
+  }
+  .hunk-action.reject { width: 22px; height: 22px; min-width: 22px; min-height: 22px; font-size: 12px; }
+  textarea.result-editor::placeholder {
+    font-family: var(--vscode-font-family, system-ui, sans-serif);
+    font-style: normal;
+    font-size: 12px;
+    letter-spacing: 0;
+  }
+  pre.code, textarea.result-editor { scrollbar-color: color-mix(in srgb, var(--muted) 45%, transparent) transparent; }
+  pre.code:hover, textarea.result-editor:hover { scrollbar-color: color-mix(in srgb, var(--muted) 80%, transparent) transparent; }
   @keyframes gwp-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
   @keyframes gwp-pop { from { transform: scale(.6); opacity: 0; } to { transform: none; opacity: 1; } }
   @keyframes gwp-flash { 0% { box-shadow: inset 0 0 0 100px color-mix(in srgb, var(--state, var(--green)) 35%, transparent); } 100% { box-shadow: inset 0 0 0 100px transparent; } }
@@ -1399,6 +1432,29 @@ function getClientScript(): string {
       vscodeApi.postMessage({ type: 'save', content: result, deleteFile: deleteResult });
     }
   });
+
+  // Keep the horizontal scroll position of every code block (Current, Result, Incoming,
+  // in every row) in step so long lines can be compared side by side.
+  const scrollSelector = 'pre.code, textarea.result-editor';
+  const appliedScroll = new Map();
+  mergeGrid.addEventListener('scroll', (event) => {
+    const source = event.target;
+    if (!(source instanceof Element) || !source.matches(scrollSelector)) {
+      return;
+    }
+    if (appliedScroll.get(source) === source.scrollLeft) {
+      return;
+    }
+    const left = source.scrollLeft;
+    appliedScroll.clear();
+    mergeGrid.querySelectorAll(scrollSelector).forEach((element) => {
+      if (element !== source && element.scrollLeft !== left) {
+        element.scrollLeft = left;
+        appliedScroll.set(element, element.scrollLeft);
+      }
+    });
+    requestAnimationFrame(() => appliedScroll.clear());
+  }, true);
 
   buildGrid();
   `;
