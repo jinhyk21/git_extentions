@@ -2,7 +2,7 @@
   "name": "git-workspace-pro",
   "displayName": "Git Workspace Pro",
   "description": "%extension.description%",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "author": "Ninh Ngọc Tuấn",
   "publisher": "jinhy",
   "license": "MIT",
@@ -247,7 +247,10 @@
         },
         "gitWorkspacePro.sidebar.mode": {
           "type": "string",
-          "enum": ["modern", "classic"],
+          "enum": [
+            "modern",
+            "classic"
+          ],
           "enumDescriptions": [
             "%config.sidebar.mode.modern%",
             "%config.sidebar.mode.classic%"
@@ -259,6 +262,11 @@
           "type": "boolean",
           "default": false,
           "description": "%config.sidebar.showCleanRepositories%"
+        },
+        "gitWorkspacePro.conflictEditor.openInNewWindow": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.conflictEditor.openInNewWindow%"
         },
         "gitWorkspacePro.pullStrategy": {
           "type": "string",
