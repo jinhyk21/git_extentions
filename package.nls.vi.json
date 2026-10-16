@@ -54,5 +54,6 @@
   "config.sidebar.mode": "Kiểu thanh bên. 'modern' là dạng thẻ; 'classic' là cây gốc của VS Code.",
   "config.sidebar.mode.modern": "Thanh bên dạng thẻ với thao tác nhanh, tìm kiếm và hiệu ứng.",
   "config.sidebar.mode.classic": "Cây gốc của VS Code.",
+  "config.conflictEditor.openInNewWindow": "Mở trình giải quyết xung đột trong cửa sổ nổi riêng thay vì một tab trình soạn thảo (cần VS Code 1.85+).",
   "config.sidebar.showCleanRepositories": "Hiển thị cả các kho sạch và đã đồng bộ trong thanh bên modern."
 }

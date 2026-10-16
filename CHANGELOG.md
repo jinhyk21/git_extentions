@@ -4,6 +4,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.5.4] - 2026-10-16
+
+### Changed
+- Conflict editor redesigned in an IntelliJ-style three-column layout (Current | Result | Incoming) with a sticky column header, rounded conflict blocks, glass-style pill and ring buttons, soft colour gradients instead of hard borders, status badges, a progress bar and a bottom Apply/Cancel bar. The layout always keeps three columns and scrolls horizontally on narrow windows.
+- "Apply non-conflicting changes:" is now "Resolve all conflicts:", which matches what the Left/All/Right buttons do.
+- The conflict editor opens in its own floating window instead of an editor tab; set `gitWorkspacePro.conflictEditor.openInNewWindow` to `false` to keep it in a tab (requires VS Code 1.85+).
+
+### Fixed
+- Long lines in the conflict editor scroll horizontally instead of being cut off, and the empty trailing block at the end of a file is hidden.
+
 ## [0.5.3] - 2026-10-14
 
 ### Added

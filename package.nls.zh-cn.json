@@ -54,5 +54,6 @@
   "config.sidebar.mode": "侧边栏样式。“modern”为卡片式；“classic”为 VS Code 原生树。",
   "config.sidebar.mode.modern": "带快捷操作、搜索和动画的卡片式侧边栏。",
   "config.sidebar.mode.classic": "VS Code 原生树视图。",
+  "config.conflictEditor.openInNewWindow": "在独立的浮动窗口中打开冲突解决编辑器，而不是编辑器标签页（需要 VS Code 1.85+）。",
   "config.sidebar.showCleanRepositories": "在 modern 侧边栏中同时列出干净且已同步的仓库。"
 }

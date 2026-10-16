@@ -54,5 +54,6 @@
   "config.sidebar.mode": "Sidebar style. 'modern' is the card-based view; 'classic' is the native VS Code tree.",
   "config.sidebar.mode.modern": "Card-based sidebar with quick actions, search, and animations.",
   "config.sidebar.mode.classic": "Native VS Code tree view.",
+  "config.conflictEditor.openInNewWindow": "Open the conflict resolution editor in its own floating window instead of an editor tab (requires VS Code 1.85+).",
   "config.sidebar.showCleanRepositories": "Also list repositories that are clean and in sync in the modern sidebar."
 }

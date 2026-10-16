@@ -57,6 +57,22 @@ export class ConflictResolutionPanel {
     const instance = new ConflictResolutionPanel(repositoryManager, repositoryRootPath, filePath, onResolved, key);
     ConflictResolutionPanel.openPanels.set(key, instance);
     await instance.render();
+    await instance.moveToFloatingWindow();
+  }
+
+  private async moveToFloatingWindow(): Promise<void> {
+    const enabled = vscode.workspace
+      .getConfiguration("gitWorkspacePro")
+      .get<boolean>("conflictEditor.openInNewWindow", true);
+    if (!enabled || this.disposed) {
+      return;
+    }
+    try {
+      this.panel.reveal(undefined, false);
+      await vscode.commands.executeCommand("workbench.action.moveEditorToNewWindow");
+    } catch {
+      // Older hosts without auxiliary windows keep the editor in its tab.
+    }
   }
 
   private constructor(
