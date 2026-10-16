@@ -1,0 +1,22 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "type": "npm",
+      "script": "compile",
+      "problemMatcher": "$tsc",
+      "label": "npm: compile"
+    },
+    {
+      "label": "playground: compile + recreate conflict repo",
+      "dependsOrder": "sequence",
+      "dependsOn": ["npm: compile", "npm: qa:playground"]
+    },
+    {
+      "type": "npm",
+      "script": "qa:playground",
+      "label": "npm: qa:playground",
+      "problemMatcher": []
+    }
+  ]
+}

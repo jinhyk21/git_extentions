@@ -32,6 +32,14 @@ npm run qa:create-conflict -- multi
 npm run qa:create-conflict -- modify-delete
 ```
 
+## Showcase (xem giao diện conflict editor)
+
+```bash
+npm run qa:create-conflict -- showcase
+```
+
+Tạo 3 file đang conflict: `src/orderService.ts` (4 hunk: nhiều dòng, một dòng rất dài để thử cuộn ngang, một bên xoá bớt khối, add/add, có Base nhờ diff3), `src/styles/theme.css` và `docs/CONTRIBUTING.md`.
+
 ## Binary conflict
 
 ```bash

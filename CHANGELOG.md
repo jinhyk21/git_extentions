@@ -4,6 +4,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.5.6] - 2026-10-16
+
+### Added
+- Conflict editor: horizontal scrolling is synchronised across the Current, Result and Incoming columns (and the unchanged-lines blocks), so dragging one scrolls the others to the same position and long lines can be compared side by side. The per-block scrollbars are now always faintly visible.
+
+## [0.5.5] - 2026-10-16
+
+### Fixed
+- Conflict editor: the accept buttons (`»`, `«`) between the columns are now round and centred in a wider gutter instead of being squeezed into ovals that touched the code, so padding is even on both sides.
+- Conflict editor: the Result placeholder no longer garbles Vietnamese diacritics (it uses the UI font instead of an italic monospace font), and horizontal scrollbars stay hidden until you hover over a code block.
+
+### Added
+- `npm run qa:create-conflict -- showcase` creates a repository with three conflicted files (multi-line hunks, a very long line, a one-sided deletion, add/add, diff3 base) for checking the conflict editor UI by hand; `npm run qa:playground` recreates it in `manual-conflict-test/`.
+
 ## [0.5.4] - 2026-10-16
 
 ### Changed

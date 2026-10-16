@@ -2,7 +2,7 @@
   "name": "git-workspace-pro",
   "displayName": "Git Workspace Pro",
   "description": "%extension.description%",
-  "version": "0.5.4",
+  "version": "0.5.6",
   "author": "Ninh Ngọc Tuấn",
   "publisher": "jinhy",
   "license": "MIT",
@@ -606,7 +606,8 @@
     "qa:ui": "npm run pretest:unit && mocha --grep \"\\\\[UI/UX\\\\]\" && node scripts/qa-render-ui.js && node scripts/qa-render-sidebar.js && node scripts/qa-render-history.js && node scripts/qa-render-panels.js",
     "qa:performance": "npm run compile && node scripts/qa-performance.js",
     "qa:all": "npm run qa:smoke && npm run qa:ui && npm run qa:performance",
-    "qa:create-conflict": "node scripts/create-conflict-fixture.js"
+    "qa:create-conflict": "node scripts/create-conflict-fixture.js",
+    "qa:playground": "node scripts/create-conflict-fixture.js showcase --output manual-conflict-test --force"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",

@@ -52,14 +52,20 @@ describe("[UI/UX] conflict editor webview", () => {
   });
 
   it("always keeps the three-column layout and has no duplicate IDs", () => {
-    assert.match(html, /minmax\(0,\s*1fr\)\s*52px\s*minmax\(0,\s*1\.15fr\)\s*52px\s*minmax\(0,\s*1fr\)/);
-    assert.match(html, /min-width:\s*900px/);
+    assert.match(html, /minmax\(0,\s*1fr\)\s*72px\s*minmax\(0,\s*1\.15fr\)\s*72px\s*minmax\(0,\s*1fr\)/);
+    assert.match(html, /min-width:\s*960px/);
     assert.match(html, /@media \(max-width: 760px\)/);
     assert.doesNotMatch(html, /min-width:\s*1040px/);
     assert.match(html, /overflow:\s*auto/);
 
     const ids = [...html.matchAll(/\sid="([^"]+)"/g)].map((match) => match[1]);
     assert.strictEqual(new Set(ids).size, ids.length);
+  });
+
+  it("synchronises horizontal scrolling across the three columns", () => {
+    assert.match(html, /scrollSelector/);
+    assert.match(html, /addEventListener\('scroll'/);
+    assert.match(html, /element\.scrollLeft = left/);
   });
 
   it("uses a restrictive CSP and a nonce-protected syntactically valid client script", () => {

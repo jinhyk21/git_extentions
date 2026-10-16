@@ -3,6 +3,7 @@ const {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  rmSync,
   writeFileSync
 } = require("node:fs");
 const { tmpdir } = require("node:os");
@@ -14,7 +15,8 @@ const SUPPORTED_SCENARIOS = new Set([
   "rebase",
   "multi",
   "modify-delete",
-  "binary"
+  "binary",
+  "showcase"
 ]);
 
 function git(repositoryPath, args) {
@@ -215,6 +217,178 @@ function createBinaryConflict(repositoryPath) {
   expectConflict(repositoryPath, ["merge", "feature/binary"]);
 }
 
+// Rich fixture for eyeballing the conflict editor UI: multi-line hunks, a very long line
+// (horizontal scroll), one side deleting a block, add/add, diff3 base, unchanged context
+// between hunks, and two more conflicted files (CSS and Markdown).
+function buildShowcaseService(side) {
+  const pick = (base, current, incoming) => (side === "base" ? base : side === "current" ? current : incoming);
+  return [
+    "import { Order, OrderLine } from \"./models\";",
+    "import { logger } from \"./logger\";",
+    "",
+    "// Pricing helpers -----------------------------------------------------",
+    "",
+    ...pick(
+      [
+        "export function lineTotal(line: OrderLine): number {",
+        "  return line.price * line.quantity;",
+        "}"
+      ],
+      [
+        "export function lineTotal(line: OrderLine): number {",
+        "  const gross = line.price * line.quantity;",
+        "  const discount = line.discountRate ?? 0;",
+        "  return Math.round(gross * (1 - discount) * 100) / 100;",
+        "}"
+      ],
+      [
+        "export function lineTotal(line: OrderLine, taxRate = 0.1): number {",
+        "  const net = line.price * line.quantity;",
+        "  return net + net * taxRate;",
+        "}"
+      ]
+    ),
+    "",
+    "export function orderSubtotal(order: Order): number {",
+    "  return order.lines.reduce((sum, line) => sum + lineTotal(line), 0);",
+    "}",
+    "",
+    "// Configuration -------------------------------------------------------",
+    "",
+    ...pick(
+      ["export const ENDPOINT = \"https://api.example.com/v1/orders\";"],
+      ["export const ENDPOINT = \"https://api.example.com/v2/orders?include=lines,customer,shipping,payments,audit-trail&expand=all&pageSize=250&sort=createdAt:desc&locale=en-US\";"],
+      ["export const ENDPOINT = \"https://api.example.com/v1/orders?include=lines&pageSize=50&region=eu-west-1&featureFlags=bulk-import,partial-refund,idempotent-retry,async-webhooks\";"]
+    ),
+    "",
+    "export const MAX_RETRIES = 3;",
+    "export const TIMEOUT_MS = 5000;",
+    "",
+    "// Validation ----------------------------------------------------------",
+    "",
+    ...pick(
+      [
+        "export function validate(order: Order): string[] {",
+        "  const errors: string[] = [];",
+        "  if (order.lines.length === 0) {",
+        "    errors.push(\"Order has no lines\");",
+        "  }",
+        "  if (!order.customerId) {",
+        "    errors.push(\"Missing customer\");",
+        "  }",
+        "  return errors;",
+        "}"
+      ],
+      [
+        "export function validate(order: Order): string[] {",
+        "  const errors: string[] = [];",
+        "  if (order.lines.length === 0) {",
+        "    errors.push(\"Order has no lines\");",
+        "  }",
+        "  return errors;",
+        "}"
+      ],
+      [
+        "export function validate(order: Order): string[] {",
+        "  const errors: string[] = [];",
+        "  if (order.lines.length === 0) {",
+        "    errors.push(\"Order has no lines\");",
+        "  }",
+        "  if (!order.customerId) {",
+        "    errors.push(\"Order is missing a customer\");",
+        "  }",
+        "  if (order.lines.some((line) => line.quantity <= 0)) {",
+        "    errors.push(\"Quantities must be positive\");",
+        "  }",
+        "  return errors;",
+        "}"
+      ]
+    ),
+    "",
+    "export function isEmpty(order: Order): boolean {",
+    "  return order.lines.length === 0;",
+    "}",
+    "",
+    "// Exports -------------------------------------------------------------",
+    "",
+    ...pick(
+      ["export const VERSION = \"1.0.0\";"],
+      ["export const VERSION = \"1.1.0\";", "export const BUILD = \"main-4821\";"],
+      ["export const VERSION = \"2.0.0-beta\";", "export const CHANNEL = \"beta\";"]
+    ),
+    "",
+    "logger.info(\"order service loaded\");",
+    ""
+  ].join("\n");
+}
+
+function buildShowcaseCss(side) {
+  const accent = side === "base" ? "#3b82f6" : side === "current" ? "#2563eb" : "#10b981";
+  const radius = side === "base" ? "4px" : side === "current" ? "8px" : "16px";
+  return [
+    ":root {",
+    `  --accent: ${accent};`,
+    "  --text: #1f2937;",
+    "  --surface: #ffffff;",
+    "}",
+    "",
+    "body {",
+    "  margin: 0;",
+    "  font-family: system-ui, sans-serif;",
+    "  color: var(--text);",
+    "}",
+    "",
+    ".card {",
+    `  border-radius: ${radius};`,
+    "  background: var(--surface);",
+    "}",
+    ""
+  ].join("\n");
+}
+
+function buildShowcaseNotes(side) {
+  const line = side === "base"
+    ? "Run `npm test` before opening a pull request."
+    : side === "current"
+      ? "Run `npm test` and `npm run lint` before opening a pull request."
+      : "Run `pnpm test` before opening a pull request, and tag a reviewer.";
+  return [
+    "# Contributing",
+    "",
+    "Thanks for helping out!",
+    "",
+    "## Before you push",
+    "",
+    line,
+    "",
+    "## Questions",
+    "",
+    "Ask in the team channel.",
+    ""
+  ].join("\n");
+}
+
+function createShowcaseConflict(repositoryPath) {
+  git(repositoryPath, ["config", "merge.conflictStyle", "diff3"]);
+  const write = (side) => {
+    writeText(repositoryPath, "src/orderService.ts", buildShowcaseService(side));
+    writeText(repositoryPath, "src/styles/theme.css", buildShowcaseCss(side));
+    writeText(repositoryPath, "docs/CONTRIBUTING.md", buildShowcaseNotes(side));
+  };
+
+  write("base");
+  commitAll(repositoryPath, "initial showcase fixture");
+
+  git(repositoryPath, ["switch", "--quiet", "-c", "feature/incoming"]);
+  write("incoming");
+  commitAll(repositoryPath, "incoming: tax rate, region endpoint, stricter validation");
+
+  git(repositoryPath, ["switch", "--quiet", "main"]);
+  write("current");
+  commitAll(repositoryPath, "current: discounts, v2 endpoint, simpler validation");
+  expectConflict(repositoryPath, ["merge", "feature/incoming"]);
+}
+
 function parseArguments() {
   const argumentsList = process.argv.slice(2);
   const scenario = argumentsList.find((argument) => !argument.startsWith("--")) || "merge";
@@ -230,14 +404,22 @@ function parseArguments() {
   }
   return {
     scenario,
-    outputPath: outputValue ? path.resolve(outputValue) : undefined
+    outputPath: outputValue ? path.resolve(outputValue) : undefined,
+    force: argumentsList.includes("--force")
   };
 }
 
 function main() {
-  const { scenario, outputPath } = parseArguments();
+  const { scenario, outputPath, force } = parseArguments();
   if (outputPath && existsSync(outputPath)) {
-    throw new Error(`Output directory already exists: ${outputPath}`);
+    // --force only replaces a previous fixture, never an arbitrary directory.
+    const isPreviousFixture = path.basename(outputPath).startsWith("manual-conflict-test")
+      && existsSync(path.join(outputPath, ".git"));
+    if (!force || !isPreviousFixture) {
+      throw new Error(`Output directory already exists: ${outputPath}`
+        + (force ? " (--force only replaces a manual-conflict-test* git fixture)" : " (use --force to replace a manual-conflict-test* fixture)"));
+    }
+    rmSync(outputPath, { recursive: true, force: true });
   }
   const repositoryPath = outputPath ?? mkdtempSync(path.join(tmpdir(), `gwp-${scenario}-conflict-`));
   if (outputPath) {
@@ -263,6 +445,9 @@ function main() {
       break;
     case "binary":
       createBinaryConflict(repositoryPath);
+      break;
+    case "showcase":
+      createShowcaseConflict(repositoryPath);
       break;
   }
 
